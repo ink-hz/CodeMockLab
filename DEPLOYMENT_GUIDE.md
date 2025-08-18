@@ -59,54 +59,28 @@
    ANTHROPIC_API_KEY="your-anthropic-api-key"
    ```
 
-### 方案2: 阿里云 ECS + RDS
+### 方案2: AWS EC2 + RDS
 
 #### 适用场景
 - 需要完全控制
-- 国内用户为主
-- 预算充足
+- 全球用户访问
+- 企业级需求
 
 #### 配置推荐
-- **ECS**: 2核4G，Ubuntu 22.04
-- **RDS**: PostgreSQL 14
-- **带宽**: 5M起步
-- **存储**: SSD 40GB起步
+- **EC2**: t3.medium (2核4G)，Ubuntu 22.04
+- **RDS**: PostgreSQL 15
+- **安全组**: 配置HTTP/HTTPS/SSH访问
+- **存储**: 30GB gp3 SSD起步
 
-#### 部署脚本
+#### 快速部署
 ```bash
-#!/bin/bash
-# 服务器环境准备
-sudo apt update && sudo apt upgrade -y
-
-# 安装Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# 安装PM2
-sudo npm install -g pm2
-
-# 安装Nginx
-sudo apt install nginx -y
-
-# 克隆项目
-git clone https://github.com/ink-hz/CodeMockLab.git
-cd CodeMockLab
-
-# 安装依赖
-npm install
-
-# 构建项目
-npm run build
-
-# 配置环境变量
-cp .env.example .env.local
-# 编辑 .env.local 填入生产环境配置
-
-# 启动应用
-pm2 start npm --name "codemocklab" -- start
-pm2 save
-pm2 startup
+# 下载并运行AWS自动化部署脚本
+curl -O https://raw.githubusercontent.com/ink-hz/CodeMockLab/main/scripts/aws-deploy.sh
+chmod +x aws-deploy.sh
+sudo ./aws-deploy.sh
 ```
+
+详细指南: [AWS部署文档](./AWS_DEPLOY.md)
 
 ### 方案3: Railway (最简单)
 
@@ -173,7 +147,7 @@ sudo crontab -e
 - 限制访问IP
 - 定期备份数据
 
-### 3. 服务器安全 (ECS)
+### 3. 服务器安全 (EC2)
 ```bash
 # 防火墙配置
 sudo ufw enable

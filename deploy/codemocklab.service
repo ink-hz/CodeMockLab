@@ -1,0 +1,60 @@
+# systemd 服务配置文件 - CodeMockLab
+# 路径: /etc/systemd/system/codemocklab.service
+
+[Unit]
+Description=CodeMockLab - AI-Powered Mock Interview Platform
+Documentation=https://github.com/ink-hz/CodeMockLab
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=codemocklab
+Group=codemocklab
+WorkingDirectory=/opt/codemocklab
+
+# 环境变量
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/opt/codemocklab/.env.production
+
+# 启动命令
+ExecStart=/usr/bin/npm start
+ExecReload=/bin/kill -HUP $MAINPID
+
+# 重启策略
+Restart=always
+RestartSec=10
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=32768
+
+# 内存和CPU限制
+MemoryHigh=2G
+MemoryMax=4G
+CPUQuota=200%
+
+# 安全设置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/codemocklab/public/uploads /tmp /var/log/codemocklab
+
+# 标准输出和错误输出
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codemocklab
+
+# 超时设置
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# 进程管理
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+Alias=codemocklab
