@@ -75,7 +75,7 @@
 #### 快速部署
 ```bash
 # 下载并运行AWS自动化部署脚本
-curl -O https://raw.githubusercontent.com/ink-hz/CodeMockLab/main/scripts/aws-deploy.sh
+curl -O https://raw.githubusercontent.com/ink-hz/CodeMockLab/master/scripts/aws-deploy.sh
 chmod +x aws-deploy.sh
 sudo ./aws-deploy.sh
 ```

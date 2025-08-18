@@ -65,7 +65,7 @@ sudo journalctl -u codemocklab -f
 ### 方式一：自动化脚本部署
 ```bash
 # 下载自动化部署脚本
-wget https://raw.githubusercontent.com/ink-hz/CodeMockLab/main/scripts/aws-deploy.sh
+wget https://raw.githubusercontent.com/ink-hz/CodeMockLab/master/scripts/aws-deploy.sh
 
 # 赋予执行权限
 chmod +x aws-deploy.sh

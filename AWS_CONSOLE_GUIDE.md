@@ -208,7 +208,7 @@ ssh -i codemocklab-key.pem ubuntu@YOUR_EC2_PUBLIC_IP
 
 ```bash
 # 下载部署脚本
-curl -O https://raw.githubusercontent.com/ink-hz/CodeMockLab/main/scripts/aws-deploy.sh
+curl -O https://raw.githubusercontent.com/ink-hz/CodeMockLab/master/scripts/aws-deploy.sh
 
 # 赋予执行权限
 chmod +x aws-deploy.sh
