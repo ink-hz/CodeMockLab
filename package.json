@@ -1,24 +1,83 @@
 {
   "name": "codemocklab",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "AI驱动的程序员模拟面试平台",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "setup": "chmod +x scripts/*.sh && ./scripts/setup.sh",
+    "dev:start": "chmod +x scripts/dev.sh && ./scripts/dev.sh",
+    "prod:deploy": "chmod +x scripts/prod.sh && ./scripts/prod.sh",
+    "db:manage": "chmod +x scripts/database.sh && ./scripts/database.sh",
+    "docker:build": "docker build -t codemocklab .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
+    "@hookform/resolvers": "^5.2.1",
+    "@prisma/client": "^6.14.0",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "autoprefixer": "^10.4.21",
+    "axios": "^1.11.0",
+    "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
+    "lucide-react": "^0.539.0",
+    "mammoth": "^1.10.0",
+    "next": "15.4.6",
+    "next-auth": "^4.24.11",
+    "pdf-parse": "^1.1.1",
+    "prisma": "^6.14.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.4.6"
+    "react-hook-form": "^7.62.0",
+    "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4"
-  }
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "ai",
+    "interview",
+    "programming",
+    "mock",
+    "nextjs",
+    "typescript",
+    "prisma"
+  ],
+  "author": "CodeMockLab Team",
+  "license": "MIT"
 }

@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CodeMockLab - AI驱动的程序员模拟面试平台
 
-## Getting Started
+## 项目概述
+基于大语言模型的智能面试准备平台，为程序员提供个性化、高质量的模拟面试体验。
 
-First, run the development server:
+## 技术栈
+- **前端**: Next.js 14, TypeScript, Tailwind CSS
+- **后端**: Node.js, Prisma ORM
+- **数据库**: PostgreSQL
+- **AI集成**: OpenAI/Anthropic API
+- **认证**: NextAuth.js
+
+## 核心功能
+1. **智能简历解析** - 自动提取技术栈和项目经验
+2. **动态面试生成** - 根据岗位JD和简历定制问题
+3. **实时AI交互** - 多轮追问，代码实时运行
+4. **详细评估报告** - 能力分析与改进建议
+
+## 快速开始
 
 ```bash
+# 安装依赖
+npm install
+
+# 配置环境变量
+cp .env.example .env.local
+
+# 初始化数据库
+npx prisma generate
+npx prisma db push
+
+# 启动开发服务器
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+访问 [http://localhost:3000](http://localhost:3000) 查看应用
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 项目结构
+```
+codemocklab/
+├── src/
+│   ├── app/          # Next.js应用路由
+│   ├── components/   # React组件
+│   ├── lib/          # 工具函数和配置
+│   └── types/        # TypeScript类型定义
+├── prisma/           # 数据库模型
+└── public/           # 静态资源
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 开发进度
+- ✅ 项目基础架构
+- ✅ 数据库模型设计
+- ✅ 用户认证系统
+- ✅ 核心页面布局
+- 🔄 简历解析功能
+- 📋 AI模型集成
+- 📋 面试流程实现

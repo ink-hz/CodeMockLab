@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  password        String
+  name            String?
+  avatar          String?
+  role            UserRole        @default(CANDIDATE)
+  profile         UserProfile?
+  interviews      Interview[]
+  resumes         Resume[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model UserProfile {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experienceLevel ExperienceLevel
+  targetRoles     String[]
+  techStack       String[]
+  targetCompanies String[]
+  weakAreas       String[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Resume {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileUrl         String
+  parsedContent   Json?
+  techKeywords    String[]
+  projects        Json[]
+  workExperience  Json[]
+  
+  // AI解析的技术画像
+  aiProfile       ResumeAIProfile?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model ResumeAIProfile {
+  id              String          @id @default(cuid())
+  resumeId        String          @unique
+  resume          Resume          @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  
+  // 技术栈评估 (按价值排序)
+  techStack       TechStackItem[]
+  
+  // 技术亮点
+  techHighlights  String[]
+  
+  // 项目经验分析
+  projectAnalysis ProjectAnalysis[]
+  
+  // 技能评估
+  skillAssessment Json            // 各技能的评估分数和理由
+  
+  // 经验等级评估
+  experienceLevel String          // junior/mid/senior/lead
+  experienceLevelConfidence Float // 0-1的置信度
+  
+  // 技术领域专长
+  specializations String[]        // 如: ["前端开发", "系统架构", "数据分析"]
+  
+  // 职业发展建议
+  careerSuggestions String[]
+  
+  // 匹配分析 (相对于不同岗位的匹配度)
+  roleMatchingAnalysis Json
+  
+  // AI解析原始数据
+  rawAnalysis     Json
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model TechStackItem {
+  id              String          @id @default(cuid())
+  profileId       String
+  profile         ResumeAIProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  technology      String          // 技术名称
+  category        String          // 分类: "语言", "框架", "工具", "平台"
+  proficiency     String          // 熟练度: "初级", "中级", "高级", "专家"
+  valueScore      Float           // 价值评分 (0-100)
+  evidenceCount   Int             // 证据数量 (在简历中出现的相关项目/经验数)
+  lastUsed        String?         // 最近使用时间估计
+  
+  createdAt       DateTime        @default(now())
+}
+
+model ProjectAnalysis {
+  id              String          @id @default(cuid())
+  profileId       String
+  profile         ResumeAIProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  projectName     String
+  description     String          @db.Text
+  techStack       String[]
+  complexity      String          // "简单", "中等", "复杂", "高级"
+  impact          String          // 项目影响力描述
+  role            String          // 在项目中的角色
+  highlights      String[]        // 技术亮点
+  
+  createdAt       DateTime        @default(now())
+}
+
+model JobPosition {
+  id              String          @id @default(cuid())
+  company         String
+  title           String
+  level           String
+  description     String          @db.Text
+  requirements    String[]
+  skills          String[]
+  interviews      Interview[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Interview {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPositionId   String?
+  jobPosition     JobPosition?    @relation(fields: [jobPositionId], references: [id])
+  type            InterviewType
+  status          InterviewStatus @default(SCHEDULED)
+  rounds          InterviewRound[]
+  report          InterviewReport?
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model InterviewRound {
+  id              String          @id @default(cuid())
+  interviewId     String
+  interview       Interview       @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  roundNumber     Int
+  type            RoundType
+  questions       Question[]
+  duration        Int?
+  score           Float?
+  feedback        String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Question {
+  id              String          @id @default(cuid())
+  roundId         String
+  round           InterviewRound  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  content         String          @db.Text
+  type            QuestionType
+  difficulty      Difficulty
+  category        String
+  userAnswer      String?         @db.Text
+  modelAnswer     String?         @db.Text
+  code            String?         @db.Text
+  score           Float?
+  feedback        String?         @db.Text
+  followUps       Json[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model InterviewReport {
+  id              String          @id @default(cuid())
+  interviewId     String          @unique
+  interview       Interview       @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  overallScore    Float
+  technicalScore  Float?
+  communicationScore Float?
+  problemSolvingScore Float?
+  systemDesignScore Float?
+  strengths       String[]
+  weaknesses      String[]
+  recommendations String[]        @db.Text
+  detailedAnalysis Json
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+enum UserRole {
+  CANDIDATE
+  INTERVIEWER
+  ADMIN
+}
+
+enum ExperienceLevel {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  PRINCIPAL
+}
+
+enum InterviewType {
+  TECHNICAL
+  BEHAVIORAL
+  SYSTEM_DESIGN
+  FULL_LOOP
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum RoundType {
+  CODING
+  ALGORITHM
+  SYSTEM_DESIGN
+  BEHAVIORAL
+  PROJECT_DISCUSSION
+}
+
+enum QuestionType {
+  CODING
+  ALGORITHM
+  SYSTEM_DESIGN
+  BEHAVIORAL
+  TECHNICAL_KNOWLEDGE
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
