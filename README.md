@@ -14,7 +14,7 @@
 
 **🤖 革命性的AI面试平台，为程序员提供个性化的技术面试体验**
 
-[🚀 在线演示](https://codemocklab.vercel.app) | [📚 文档](https://github.com/ink-hz/CodeMockLab/wiki) | [💡 特性](#-核心特性) | [🛠️ 快速开始](#-快速开始)
+[📚 文档](https://github.com/ink-hz/CodeMockLab/wiki) | [💡 特性](#-核心特性) | [🛠️ 快速开始](#-快速开始)
 
 </div>
 
@@ -58,11 +58,11 @@ CodeMockLab 是一个基于AI的智能面试平台，专为程序员设计。它
 
 <div align="center">
 
-| 前端技术 | 后端技术 | 数据库 | AI服务 | 部署运维 |
-|---------|---------|-------|-------|---------|
-| ![Next.js](https://img.shields.io/badge/-Next.js%2015-000000?style=flat-square&logo=next.js) | ![Node.js](https://img.shields.io/badge/-Node.js-339933?style=flat-square&logo=node.js&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/-PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white) | ![DeepSeek](https://img.shields.io/badge/-DeepSeek%20AI-FF6B35?style=flat-square) | ![Vercel](https://img.shields.io/badge/-Vercel-000000?style=flat-square&logo=vercel) |
-| ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) | ![Prisma](https://img.shields.io/badge/-Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white) | ![Redis](https://img.shields.io/badge/-Redis-DC382D?style=flat-square&logo=redis&logoColor=white) | ![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white) | ![Docker](https://img.shields.io/badge/-Docker-2496ED?style=flat-square&logo=docker&logoColor=white) |
-| ![Tailwind](https://img.shields.io/badge/-Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) | ![NextAuth.js](https://img.shields.io/badge/-NextAuth.js-000000?style=flat-square) | | | |
+| 前端技术 | 后端技术 | 数据库 | AI服务 |
+|---------|---------|-------|-------|
+| ![Next.js](https://img.shields.io/badge/-Next.js%2015-000000?style=flat-square&logo=next.js) | ![Node.js](https://img.shields.io/badge/-Node.js-339933?style=flat-square&logo=node.js&logoColor=white) | ![PostgreSQL](https://img.shields.io/badge/-PostgreSQL-336791?style=flat-square&logo=postgresql&logoColor=white) | ![DeepSeek](https://img.shields.io/badge/-DeepSeek%20AI-FF6B35?style=flat-square) |
+| ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) | ![Prisma](https://img.shields.io/badge/-Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white) | ![Redis](https://img.shields.io/badge/-Redis-DC382D?style=flat-square&logo=redis&logoColor=white) | ![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white) |
+| ![Tailwind](https://img.shields.io/badge/-Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) | ![NextAuth.js](https://img.shields.io/badge/-NextAuth.js-000000?style=flat-square) | | |
 
 </div>
 
@@ -102,8 +102,6 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### ☁️ Vercel 部署
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ink-hz/CodeMockLab)
 
 ## 📱 功能截图
 

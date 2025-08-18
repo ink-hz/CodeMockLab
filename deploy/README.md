@@ -60,30 +60,24 @@ sudo systemctl status codemocklab
 sudo journalctl -u codemocklab -f
 ```
 
-## 🔧 快速部署（推荐）
+## 🔧 本地部署指南
 
-### 方式一：自动化脚本部署
+### Docker 部署（推荐）
 ```bash
-# 下载自动化部署脚本
-wget https://raw.githubusercontent.com/ink-hz/CodeMockLab/master/scripts/aws-deploy.sh
+# 使用 Docker Compose 部署
+docker-compose up -d
 
-# 赋予执行权限
-chmod +x aws-deploy.sh
-
-# 运行部署脚本（需要root权限）
-sudo ./aws-deploy.sh
+# 查看运行状态
+docker-compose ps
 ```
-
-### 方式二：手动部署
-参考 [AWS_DEPLOY.md](../AWS_DEPLOY.md) 详细指南
 
 ## ⚙️ 配置选项
 
 ### 环境变量
-确保在 `/opt/codemocklab/.env.production` 中配置：
+确保在项目根目录的 `.env.local` 中配置：
 ```bash
 DATABASE_URL="postgresql://user:password@localhost:5432/codemocklab"
-NEXTAUTH_URL="https://your-domain.com"
+NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-secret-key"
 DEEPSEEK_API_KEY="sk-your-api-key"
 ```
@@ -210,4 +204,4 @@ sudo certbot renew
 
 - 📧 邮件: ink.hz.github@gmail.com
 - 🐛 问题反馈: [GitHub Issues](https://github.com/ink-hz/CodeMockLab/issues)
-- 📚 完整文档: [部署指南](../ALIYUN_DEPLOY.md)
+- 📚 完整文档: 参考项目 README.md
