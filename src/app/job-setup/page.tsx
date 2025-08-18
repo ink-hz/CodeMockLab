@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowRight, Building } from "lucide-react"
+import { ArrowRight, Building, Clock, Star, Trash2, RefreshCw } from "lucide-react"
 
 const COMPANIES = [
   "腾讯", "阿里巴巴", "字节跳动", "美团", "京东", 
@@ -23,10 +23,24 @@ const JOB_LEVELS = [
   { value: "expert", label: "专家 (8+年)", desc: "技术专家和技术Leader" }
 ]
 
+interface JobPreference {
+  id: string
+  company: string | null
+  customCompany: string | null
+  position: string | null
+  level: string | null
+  requirements: string | null
+  isDefault: boolean
+  usageCount: number
+  lastUsedAt: string
+}
+
 export default function JobSetupPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingPreferences, setLoadingPreferences] = useState(true)
+  const [savedPreferences, setSavedPreferences] = useState<JobPreference[]>([])
   
   const [formData, setFormData] = useState({
     company: "",
@@ -35,6 +49,116 @@ export default function JobSetupPage() {
     requirements: "",
     customCompany: ""
   })
+
+  // 加载用户的岗位偏好设置
+  useEffect(() => {
+    const loadJobPreferences = async () => {
+      if (!session?.user?.id) return
+      
+      try {
+        // 加载最近使用的偏好设置
+        const latestResponse = await fetch('/api/job-preference?type=latest')
+        if (latestResponse.ok) {
+          const { data } = await latestResponse.json()
+          if (data) {
+            setFormData({
+              company: data.company || "",
+              position: data.position || "", 
+              level: data.level || "",
+              requirements: data.requirements || "",
+              customCompany: data.customCompany || ""
+            })
+          }
+        }
+
+        // 加载所有偏好设置历史
+        const allResponse = await fetch('/api/job-preference?type=all')
+        if (allResponse.ok) {
+          const { data } = await allResponse.json()
+          setSavedPreferences(data || [])
+        }
+      } catch (error) {
+        console.error('加载偏好设置失败:', error)
+      } finally {
+        setLoadingPreferences(false)
+      }
+    }
+
+    loadJobPreferences()
+  }, [session])
+
+  // 应用选中的偏好设置
+  const applyPreference = (preference: JobPreference) => {
+    setFormData({
+      company: preference.company || "",
+      position: preference.position || "",
+      level: preference.level || "",
+      requirements: preference.requirements || "",
+      customCompany: preference.customCompany || ""
+    })
+  }
+
+  // 删除偏好设置
+  const deletePreference = async (preferenceId: string) => {
+    try {
+      const response = await fetch(`/api/job-preference?id=${preferenceId}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        setSavedPreferences(prev => prev.filter(p => p.id !== preferenceId))
+      }
+    } catch (error) {
+      console.error('删除偏好设置失败:', error)
+    }
+  }
+
+  // 保存当前设置为偏好
+  const saveAsPreference = async (isDefault = false) => {
+    if (!session?.user?.id) return
+
+    try {
+      const response = await fetch('/api/job-preference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          company: formData.company,
+          customCompany: formData.customCompany,
+          position: formData.position,
+          level: formData.level,
+          requirements: formData.requirements,
+          isDefault
+        })
+      })
+
+      if (response.ok) {
+        const { data } = await response.json()
+        // 更新偏好设置列表
+        setSavedPreferences(prev => {
+          const existing = prev.find(p => p.id === data.id)
+          if (existing) {
+            return prev.map(p => p.id === data.id ? data : p)
+          }
+          return [data, ...prev].slice(0, 10) // 只保留最近10个
+        })
+      }
+    } catch (error) {
+      console.error('保存偏好设置失败:', error)
+    }
+  }
+
+  // 清空表单
+  const clearForm = () => {
+    setFormData({
+      company: "",
+      position: "",
+      level: "",
+      requirements: "",
+      customCompany: ""
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,8 +201,13 @@ export default function JobSetupPage() {
         requirements: normalizeRequirements(formData.requirements)
       }
 
-      // 这里可以保存到数据库或会话存储
+      // 保存到会话存储用于面试使用
       sessionStorage.setItem("jobSetup", JSON.stringify(jobData))
+      
+      // 自动保存偏好设置（如果用户已登录）
+      if (session?.user?.id) {
+        await saveAsPreference(false) // 不设为默认，只记录使用历史
+      }
       
       // 跳转到面试页面
       router.push("/interview/start")
@@ -112,6 +241,86 @@ export default function JobSetupPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* 偏好设置快速选择区域 */}
+              {!loadingPreferences && savedPreferences.length > 0 && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700">最近使用的设置</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => saveAsPreference(true)}
+                      className="text-xs"
+                    >
+                      <Star className="h-3 w-3 mr-1" />
+                      设为默认
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {savedPreferences.slice(0, 3).map((preference) => (
+                      <div
+                        key={preference.id}
+                        className="flex items-center justify-between p-2 bg-white rounded border hover:bg-gray-50 cursor-pointer"
+                        onClick={() => applyPreference(preference)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 text-sm">
+                            {preference.isDefault && (
+                              <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                            )}
+                            <span className="font-medium truncate">
+                              {preference.company === "其他" ? preference.customCompany : preference.company}
+                            </span>
+                            <span className="text-gray-500">-</span>
+                            <span className="truncate">{preference.position}</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            使用{preference.usageCount}次 · {new Date(preference.lastUsedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              applyPreference(preference)
+                            }}
+                            className="h-6 w-6 p-0"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deletePreference(preference.id)
+                            }}
+                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {savedPreferences.length > 3 && (
+                    <div className="text-center mt-2">
+                      <span className="text-xs text-gray-500">
+                        还有 {savedPreferences.length - 3} 个历史设置
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -194,7 +403,7 @@ export default function JobSetupPage() {
                   </p>
                 </div>
 
-                <div className="flex justify-between pt-4">
+                <div className="flex justify-between items-center pt-4">
                   <Button 
                     type="button" 
                     variant="outline" 
@@ -202,13 +411,24 @@ export default function JobSetupPage() {
                   >
                     上一步
                   </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading || !formData.company || !formData.position || !formData.level}
-                  >
-                    {isLoading ? "保存中..." : "开始面试"}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  
+                  <div className="flex space-x-2">
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      onClick={clearForm}
+                      className="text-gray-500"
+                    >
+                      清空表单
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={isLoading || !formData.company || !formData.position || !formData.level}
+                    >
+                      {isLoading ? "保存中..." : "开始面试"}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>

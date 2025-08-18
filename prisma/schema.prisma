@@ -17,6 +17,7 @@ model User {
   profile         UserProfile?
   interviews      Interview[]
   resumes         Resume[]
+  jobPreferences  UserJobPreference[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 }
@@ -197,6 +198,32 @@ model InterviewReport {
   detailedAnalysis Json
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+}
+
+// 用户岗位偏好设置 - 记住用户上次的岗位设置
+model UserJobPreference {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 基础岗位信息
+  company         String?         // 目标公司
+  customCompany   String?         // 自定义公司名称  
+  position        String?         // 职位名称
+  level           String?         // 职位级别: junior/mid/senior/expert
+  requirements    String?         // 技能要求描述
+  
+  // 偏好配置
+  isDefault       Boolean         @default(false)  // 是否为默认配置
+  usageCount      Int             @default(1)      // 使用次数
+  
+  // 元数据
+  lastUsedAt      DateTime        @default(now())  // 最近使用时间
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([userId, lastUsedAt])
+  @@index([userId, usageCount])
 }
 
 enum UserRole {

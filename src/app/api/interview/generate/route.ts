@@ -189,9 +189,17 @@ export async function POST(request: NextRequest) {
       }))
     })
   } catch (error) {
-    console.error("Generate interview questions error:", error)
+    console.error("=== 面试问题生成失败 ===")
+    console.error("错误类型:", error.constructor.name)
+    console.error("错误信息:", error.message)
+    console.error("完整错误:", error)
+    
     return NextResponse.json(
-      { error: "Failed to generate interview questions" },
+      { 
+        error: "Failed to generate interview questions", 
+        details: error.message,
+        type: error.constructor.name 
+      },
       { status: 500 }
     )
   }

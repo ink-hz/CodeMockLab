@@ -129,16 +129,25 @@ ${aiProfile ? `
 }`
 
     try {
+      console.log("=== 调用DeepSeek生成面试问题 ===")
       const response = await this.callDeepSeek(prompt)
+      console.log("DeepSeek API响应长度:", response.length)
+      console.log("DeepSeek API响应内容:", response.substring(0, 500) + "...")
+      
       const parsed = this.parseJSONResponse(response)
       
       if (parsed && parsed.questions) {
+        console.log("成功解析到问题数量:", parsed.questions.length)
         return parsed.questions
       }
       
+      console.error("解析失败 - parsed:", parsed)
       throw new Error("Failed to parse AI response")
     } catch (error) {
-      console.error("DeepSeek AI generation failed:", error)
+      console.error("=== DeepSeek AI generation failed ===")
+      console.error("错误类型:", error.constructor.name)
+      console.error("错误信息:", error.message)
+      console.error("完整错误:", error)
       throw new Error("AI服务不可用，无法生成面试问题")
     }
   }
@@ -308,6 +317,11 @@ ${qaList.map((qa, i) => `
       throw new Error("DeepSeek API key not configured")
     }
 
+    console.log("=== DeepSeek API调用 ===")
+    console.log("API URL:", this.apiUrl)
+    console.log("Temperature:", temperature)
+    console.log("Max tokens:", maxTokens)
+
     const response = await fetch(this.apiUrl, {
       method: "POST",
       headers: {
@@ -332,12 +346,17 @@ ${qaList.map((qa, i) => `
       })
     })
 
+    console.log("Response status:", response.status)
+    console.log("Response ok:", response.ok)
+
     if (!response.ok) {
       const error = await response.text()
+      console.error("DeepSeek API error response:", error)
       throw new Error(`DeepSeek API error: ${response.status} - ${error}`)
     }
 
     const data = await response.json() as DeepSeekResponse
+    console.log("DeepSeek API data:", JSON.stringify(data, null, 2))
     return data.choices[0].message.content
   }
 
