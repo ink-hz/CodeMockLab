@@ -52,9 +52,23 @@ export const GET = withErrorHandler(async (
   }
 
   // 格式化返回数据
+  // 计算统计信息
+  const techStackArray = aiProfile.techStack || []
+  const stats = {
+    totalTechnologies: techStackArray.length,
+    avgValueScore: techStackArray.length > 0 
+      ? Math.round(techStackArray.reduce((sum: number, tech: any) => sum + (tech.valueScore || 0), 0) / techStackArray.length)
+      : 75,
+    expertLevelCount: techStackArray.filter((tech: any) => tech.proficiency === '专家').length,
+    highValueTechCount: techStackArray.filter((tech: any) => (tech.valueScore || 0) >= 90).length
+  }
+
   const response = {
     hasAIProfile: true,
     aiProfileId: aiProfile.id,
+    
+    // 统计信息
+    stats,
     
     // 基础信息
     experienceLevel: aiProfile.experienceLevel,

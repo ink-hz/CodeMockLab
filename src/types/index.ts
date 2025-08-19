@@ -43,6 +43,8 @@ export interface JobProfile {
   requirements: string[];
   description?: string;
   skills?: string[];
+  jobResponsibilities?: string[]; // 工作职责列表
+  jobRequirements?: string[]; // 任职要求列表
 }
 
 // AI技术画像类型
@@ -107,13 +109,14 @@ export interface AIProfile {
 export interface InterviewQuestion {
   id: string;
   content: string;
-  type: 'technical' | 'behavioral' | 'system-design' | 'coding';
+  type: 'technical' | 'behavioral' | 'system-design' | 'coding' | 'scenario';
   difficulty: 'easy' | 'medium' | 'hard';
   topics: string[];
   expectedKeywords?: string[];
   followUps?: string[];
   evaluationCriteria?: string;
   category?: string;
+  source?: 'responsibility' | 'requirement' | 'ai-profile' | 'basic'; // 问题来源
 }
 
 export interface EvaluationResult {

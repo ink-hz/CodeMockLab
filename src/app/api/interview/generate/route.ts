@@ -20,6 +20,8 @@ function mapQuestionType(aiType: string): QuestionType {
       return QuestionType.SYSTEM_DESIGN
     case 'behavioral':
       return QuestionType.BEHAVIORAL
+    case 'scenario':
+      return QuestionType.SCENARIO
     case 'technical':
     case 'technical_knowledge':
     default:
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { jobData } = body
+    const { jobData, mode } = body
 
     // 获取用户最新的简历和AI技术画像
     const resume = await prisma.resume.findFirst({
@@ -126,7 +128,8 @@ export async function POST(request: NextRequest) {
       projectAnalysis: resume.aiProfile.projectAnalysis,
       roleMatchingAnalysis: resume.aiProfile.roleMatchingAnalysis,
       skillAssessment: resume.aiProfile.skillAssessment,
-      careerSuggestions: resume.aiProfile.careerSuggestions
+      careerSuggestions: resume.aiProfile.careerSuggestions,
+      simulatedInterview: resume.aiProfile.simulatedInterview  // 🔥 关键字段！
     } : null
 
     console.log("=== 面试问题生成 ===")
@@ -145,14 +148,100 @@ export async function POST(request: NextRequest) {
       requirements: jobData?.requirements || []
     }
 
-    // 使用DeepSeek AI智能生成面试问题（集成AI技术画像）
-    const deepseek = new DeepSeekAI()
-    const questions = await deepseek.generateInterviewQuestions(
-      resumeProfile,
-      jobProfile,
-      aiProfile, // 传入AI技术画像数据
-      5 // 生成5道题
-    )
+    // 1. 根据模式决定是否实时生成新问题
+    let newQuestions: any[] = []
+    if (mode !== 'ai-bank-only') {
+      // 非纯题库模式：使用DeepSeek AI生成3道基于岗位的新问题
+      const deepseek = new DeepSeekAI()
+      newQuestions = await deepseek.generateInterviewQuestions(
+        resumeProfile,
+        jobProfile,
+        aiProfile, // 传入AI技术画像数据
+        3 // 生成3道新题目
+      )
+    }
+
+    console.log("=== 整合AI简历分析题库 ===")
+    console.log("模式:", mode || 'default')
+    console.log("新生成问题数量:", newQuestions.length)
+    
+    // 2. 获取AI简历分析生成的题库
+    let aiBankQuestions: any[] = []
+    if (aiProfile?.simulatedInterview) {
+      console.log("发现AI分析题库，开始整合...")
+      const interview = aiProfile.simulatedInterview
+      console.log("simulatedInterview数据结构:", Object.keys(interview))
+      
+      // 提取各类别的题目，转换为统一格式
+      const categories = [
+        { key: 'architectureDesign', type: 'system-design', name: '系统架构设计' },
+        { key: 'systemDesign', type: 'system-design', name: '系统设计' },
+        { key: 'algorithmCoding', type: 'coding', name: '算法编程' },
+        { key: 'problemSolving', type: 'technical', name: '问题解决' },
+        { key: 'projectExperience', type: 'behavioral', name: '项目经验' },
+        { key: 'industryInsight', type: 'technical', name: '行业洞察' },
+        { key: 'leadership', type: 'behavioral', name: '领导力管理' }
+      ]
+      
+      categories.forEach(category => {
+        if (interview[category.key] && Array.isArray(interview[category.key])) {
+          console.log(`处理${category.key}: ${interview[category.key].length}道题`)
+          interview[category.key].forEach((question: string, index: number) => {
+            aiBankQuestions.push({
+              id: `ai-${category.key}-${index}`,
+              content: question,
+              type: category.type,
+              difficulty: 'medium', // AI题库默认中等难度
+              topics: [category.name],
+              source: 'ai-bank',
+              originalCategory: category.name
+            })
+          })
+        } else {
+          console.log(`跳过${category.key}: 不存在或非数组`)
+        }
+      })
+      
+      // 处理技术深度题目（嵌套结构）
+      if (interview.techDepth && typeof interview.techDepth === 'object') {
+        console.log("处理techDepth:", Object.keys(interview.techDepth))
+        Object.entries(interview.techDepth).forEach(([tech, questions]: [string, any]) => {
+          if (Array.isArray(questions)) {
+            console.log(`处理${tech}技术深度: ${questions.length}道题`)
+            questions.forEach((question: string, index: number) => {
+              aiBankQuestions.push({
+                id: `ai-tech-${tech}-${index}`,
+                content: question,
+                type: 'technical',
+                difficulty: 'hard', // 技术深度题标记为困难
+                topics: [tech, '技术深度'],
+                source: 'ai-bank',
+                originalCategory: `${tech}技术深度`
+              })
+            })
+          } else {
+            console.log(`跳过${tech}: questions不是数组`, typeof questions)
+          }
+        })
+      } else {
+        console.log("跳过techDepth: 不存在或非对象", typeof interview.techDepth)
+      }
+      
+      console.log("AI题库问题数量:", aiBankQuestions.length)
+      console.log("题库类别分布:", aiBankQuestions.reduce((acc: any, q) => {
+        acc[q.originalCategory] = (acc[q.originalCategory] || 0) + 1
+        return acc
+      }, {}))
+    }
+    
+    // 3. 合并两部分题目：新生成题目 + AI题库题目
+    const allQuestions = [
+      ...newQuestions.map(q => ({ ...q, source: 'generated' })),
+      ...aiBankQuestions
+    ]
+    
+    console.log("总题目数量:", allQuestions.length)
+    console.log("新生成:", newQuestions.length, "AI题库:", aiBankQuestions.length)
 
     // 创建面试记录
     const interview = await prisma.interview.create({
@@ -173,9 +262,9 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // 保存问题到数据库
+    // 保存问题到数据库 - 使用合并后的题目
     const savedQuestions = await Promise.all(
-      questions.map((q, index) =>
+      allQuestions.map((q, index) =>
         prisma.question.create({
           data: {
             roundId: round.id,
@@ -194,13 +283,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       interviewId: interview.id,
-      questions: savedQuestions.map(q => ({
-        id: q.id,
-        content: q.content,
-        type: q.type.toLowerCase(),
-        difficulty: q.difficulty.toLowerCase(),
-        category: q.category
-      }))
+      questions: savedQuestions.map((q, index) => {
+        const originalQ = allQuestions[index]
+        return {
+          id: q.id,
+          content: q.content,
+          type: q.type.toLowerCase(),
+          difficulty: q.difficulty.toLowerCase(),
+          category: q.category,
+          source: originalQ.source || 'generated', // 标记题目来源
+          originalCategory: originalQ.category, // AI题库的原始分类
+          topics: originalQ.topics || []
+        }
+      })
     })
   } catch (error) {
     console.error("=== 面试问题生成失败 ===")

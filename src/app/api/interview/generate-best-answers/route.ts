@@ -1,127 +1,139 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { DeepSeekAI } from "@/lib/deepseek-ai"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { questionDetails, jobData } = body
-
-    if (!questionDetails || !Array.isArray(questionDetails)) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Invalid question details" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       )
     }
 
-    console.log("=== 生成最佳答案 ===")
-    console.log(`为 ${questionDetails.length} 道题生成最佳答案`)
+    const body = await request.json()
+    const { interviewId } = body
 
-    const deepseek = new DeepSeekAI()
-    const bestAnswers = []
+    console.log("=== 开始异步生成最佳答案 ===")
+    console.log("面试ID:", interviewId)
 
-    // 为每道题生成最佳答案
-    for (const question of questionDetails) {
-      try {
-        const bestAnswer = await generateBestAnswer(deepseek, question, jobData)
-        bestAnswers.push({
-          questionId: question.questionId,
-          question: question.question,
-          bestAnswer,
-          userAnswer: question.userAnswer,
-          evaluation: question.evaluation
-        })
-      } catch (error) {
-        console.error(`生成问题 ${question.questionId} 的最佳答案失败:`, error)
-        // 生成备用答案
-        bestAnswers.push({
-          questionId: question.questionId,
-          question: question.question,
-          bestAnswer: generateFallbackAnswer(question),
-          userAnswer: question.userAnswer,
-          evaluation: question.evaluation
-        })
+    // 获取面试的所有问题
+    const interview = await prisma.interview.findUnique({
+      where: { id: interviewId },
+      include: {
+        rounds: {
+          include: {
+            questions: {
+              where: {
+                modelAnswer: null // 只获取还没有生成最佳答案的题目
+              }
+            }
+          }
+        }
       }
+    })
+
+    if (!interview || interview.userId !== session.user.id) {
+      return NextResponse.json(
+        { error: "Interview not found or access denied" },
+        { status: 404 }
+      )
     }
+
+    // 获取所有需要生成最佳答案的问题
+    const allQuestions = interview.rounds.flatMap(round => round.questions)
+    console.log(`需要生成最佳答案的题目数量: ${allQuestions.length}`)
+
+    if (allQuestions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "所有题目的最佳答案已生成完毕",
+        processedCount: 0
+      })
+    }
+
+    // 异步生成最佳答案 - 不阻塞主线程
+    generateBestAnswersAsync(allQuestions)
 
     return NextResponse.json({
       success: true,
-      bestAnswers
+      message: `已开始异步生成${allQuestions.length}道题目的最佳答案`,
+      totalQuestions: allQuestions.length
     })
 
   } catch (error) {
     console.error("Generate best answers error:", error)
     return NextResponse.json(
-      { error: "Failed to generate best answers" },
+      { error: "Failed to start best answer generation" },
       { status: 500 }
     )
   }
 }
 
-async function generateBestAnswer(deepseek: DeepSeekAI, questionDetail: any, jobData: any): Promise<string> {
-  const prompt = `你是一位资深的技术专家，请为以下面试问题提供一个完美的标准答案。
+// 异步生成最佳答案的函数
+async function generateBestAnswersAsync(questions: any[]) {
+  const deepseek = new DeepSeekAI()
+  let processedCount = 0
 
-## 面试问题
-**问题**: ${questionDetail.question}
-**类型**: ${questionDetail.type}
-**难度**: ${questionDetail.difficulty}
-**分类**: ${questionDetail.category}
-
-## 岗位背景
-**公司**: ${jobData?.company || "未知"}
-**职位**: ${jobData?.position || "未知"}
-**级别**: ${jobData?.level || "未知"}
-
-## 候选人实际回答
-${questionDetail.userAnswer}
-
-## 生成要求
-请提供一个完美的标准答案，要求：
-1. 技术准确性：确保所有技术概念和实现细节都是正确的
-2. 结构清晰：逻辑清楚，层次分明
-3. 深度适当：符合问题难度和岗位级别要求
-4. 实用性强：包含实际项目中的最佳实践
-5. 完整全面：覆盖问题的所有关键点
-
-请直接返回最佳答案内容，不需要额外格式：`
-
-  // 调用AI生成最佳答案
-  const response = await (deepseek as any).callDeepSeek(prompt, 0.3, 1000)
-  return response.trim()
-}
-
-function generateFallbackAnswer(questionDetail: any): string {
-  const { question, type, difficulty } = questionDetail
+  console.log("=== 异步生成最佳答案开始 ===")
   
-  if (type === 'technical') {
-    return `针对"${question}"这个技术问题，一个完整的答案应该包括：
+  // 批量处理，每5题为一批，避免API并发过多
+  const batchSize = 5
+  for (let i = 0; i < questions.length; i += batchSize) {
+    const batch = questions.slice(i, i + batchSize)
+    
+    // 并行处理当前批次
+    const promises = batch.map(async (question) => {
+      try {
+        console.log(`生成最佳答案: ${question.content.substring(0, 50)}...`)
+        
+        // 构建topics数组
+        const topics = question.category ? [question.category] : []
+        
+        const bestAnswer = await deepseek.generateBestAnswer(
+          question.content,
+          question.type,
+          question.difficulty,
+          topics
+        )
 
-1. **核心概念解释**: 清晰定义相关技术概念和原理
-2. **实现方法**: 详细说明具体的实现步骤和技术要点
-3. **最佳实践**: 结合实际项目经验，分享最佳实践和常见陷阱
-4. **性能考虑**: 分析性能影响和优化策略
-5. **实际应用**: 举例说明在真实项目中的应用场景
+        // 更新数据库
+        await prisma.question.update({
+          where: { id: question.id },
+          data: { modelAnswer: bestAnswer }
+        })
 
-建议回答时要有条理，先概述再深入，既要体现技术深度又要展现实践经验。`
-  } else if (type === 'system-design') {
-    return `对于这个系统设计问题，标准答案应该包含：
+        console.log(`✅ 题目 ${question.id} 最佳答案生成完成`)
+        return true
+      } catch (error) {
+        console.error(`❌ 题目 ${question.id} 最佳答案生成失败:`, error)
+        
+        // 记录失败原因到数据库
+        await prisma.question.update({
+          where: { id: question.id },
+          data: { modelAnswer: "最佳答案生成失败，请稍后重试" }
+        }).catch(e => console.error("Failed to save error message:", e))
+        
+        return false
+      }
+    })
 
-1. **需求分析**: 明确功能需求和非功能需求
-2. **整体架构**: 设计系统的整体架构和核心组件
-3. **技术选型**: 选择合适的技术栈并说明原因
-4. **扩展性设计**: 考虑系统的可扩展性和高可用性
-5. **数据存储**: 设计合理的数据模型和存储方案
-6. **性能优化**: 分析性能瓶颈和优化策略
-
-系统设计题需要展现全局思维和架构能力。`
-  } else {
-    return `这是一个${type}类型的问题，一个优秀的回答应该：
-
-1. 结构清晰，逻辑性强
-2. 结合具体例子和实际经验
-3. 展现深度思考和问题解决能力
-4. 体现良好的沟通表达能力
-5. 符合岗位要求和行业标准
-
-建议在回答时保持自信，条理清楚，并适当展示个人的技术见解。`
+    // 等待当前批次完成
+    const results = await Promise.all(promises)
+    processedCount += results.filter(r => r).length
+    
+    console.log(`批次 ${Math.floor(i/batchSize) + 1} 完成，成功: ${results.filter(r => r).length}/${results.length}`)
+    
+    // 批次间暂停500ms，避免API频率限制
+    if (i + batchSize < questions.length) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
   }
+
+  console.log(`=== 异步生成最佳答案完成 ===`)
+  console.log(`总计处理: ${questions.length} 道题目`)
+  console.log(`成功生成: ${processedCount} 个最佳答案`)
 }

@@ -227,6 +227,8 @@ model UserJobPreference {
   position        String?         // 职位名称
   level           String?         // 职位级别: junior/mid/senior/expert
   requirements    String?         // 技能要求描述
+  jobResponsibilities String?     // 工作职责描述
+  jobRequirements String?         // 任职要求描述
   
   // 偏好配置
   isDefault       Boolean         @default(false)  // 是否为默认配置
@@ -283,6 +285,7 @@ enum QuestionType {
   SYSTEM_DESIGN
   BEHAVIORAL
   TECHNICAL_KNOWLEDGE
+  SCENARIO
 }
 
 enum Difficulty {

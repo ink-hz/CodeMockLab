@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Target, MessageSquare, BarChart3, LogOut, CheckCircle, RefreshCw } from "lucide-react"
+import { Upload, Target, MessageSquare, BarChart3, LogOut, CheckCircle, RefreshCw, BookOpen } from "lucide-react"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
@@ -72,20 +72,20 @@ export default function DashboardPage() {
       description: "上传您的简历，让AI了解您的技能和经验",
       icon: Upload,
       href: "/upload",
-      status: "pending"
+      status: hasResume ? "completed" : "pending"
     },
     {
       id: 2,
-      title: "设置目标岗位",
-      description: "选择您想要面试的公司和职位",
+      title: "选择刷题模式",
+      description: "AI内置题库或实时生成，选择适合的练习方式",
       icon: Target,
-      href: "/job-setup",
-      status: "disabled"
+      href: "/interview/mode-select",
+      status: hasResume ? "pending" : "disabled"
     },
     {
       id: 3,
-      title: "开始AI面试",
-      description: "与AI面试官进行实时模拟面试",
+      title: "AI模拟面试",
+      description: "开始您的个性化面试训练",
       icon: MessageSquare,
       href: "/interview/start",
       status: "disabled"
@@ -125,6 +125,18 @@ export default function DashboardPage() {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-2">开始您的AI面试之旅</h2>
           <p className="text-muted-foreground">只需4个简单步骤，获得专业的面试训练</p>
+          
+          {/* 快捷访问区域 */}
+          <div className="flex justify-center gap-4 mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push("/dashboard/questions")}
+              className="flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4" />
+              题目看板
+            </Button>
+          </div>
         </div>
 
         {/* 简历状态显示 */}

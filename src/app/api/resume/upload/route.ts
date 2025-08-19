@@ -164,18 +164,67 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     },
     aiAnalysis: aiAnalysisResult ? {
       hasAIAnalysis: true,
-      // 返回完整的AI分析结果给前端
-      techStack: aiAnalysisResult.techStack || [],
-      techHighlights: aiAnalysisResult.techHighlights || [],
-      coreExpertise: aiAnalysisResult.coreExpertise || [],
-      simulatedInterview: aiAnalysisResult.simulatedInterview || null,
+      // 返回与AI Profile API一致的数据结构
       experienceLevel: aiAnalysisResult.experienceLevel?.level || parsedContent.experienceLevel,
+      experienceLevelConfidence: aiAnalysisResult.experienceLevel?.confidence || 0.7,
       experienceReasoning: aiAnalysisResult.experienceLevel?.reasoning || "",
+      
+      // 计算统计信息
+      stats: (() => {
+        const techStackArray = (aiAnalysisResult.techStack || [])
+        return {
+          totalTechnologies: techStackArray.length,
+          avgValueScore: techStackArray.length > 0 
+            ? Math.round(techStackArray.reduce((sum: number, tech: any) => sum + (tech.dominanceScore || tech.marketValue || tech.valueScore || 70), 0) / techStackArray.length)
+            : 75,
+          expertLevelCount: techStackArray.filter((tech: any) => tech.proficiency === '专家').length,
+          highValueTechCount: techStackArray.filter((tech: any) => (tech.dominanceScore || tech.marketValue || tech.valueScore || 0) >= 90).length
+        }
+      })(),
+      
+      // 技术栈分析 - 确保与AI Profile API结构一致
+      techStack: (aiAnalysisResult.techStack || []).map((tech: any) => ({
+        technology: tech.technology || '',
+        category: tech.category || '其他',
+        proficiency: tech.proficiency || '中级',
+        valueScore: tech.dominanceScore || tech.marketValue || tech.valueScore || 70,
+        evidenceCount: tech.evidenceCount || (tech.evidence ? 1 : 0),
+        lastUsed: tech.lastUsed || '近期'
+      })),
+      
+      // 技术亮点
+      techHighlights: aiAnalysisResult.techHighlights || [],
+      
+      // 专长领域
       specializations: aiAnalysisResult.specializations || [],
-      projectAnalysis: aiAnalysisResult.projectAnalysis || [],
+      
+      // 核心专长领域
+      coreExpertise: aiAnalysisResult.coreExpertise || [],
+      
+      // 模拟面试题库
+      simulatedInterview: aiAnalysisResult.simulatedInterview || null,
+      
+      // 项目分析 - 确保与AI Profile API结构一致
+      projectAnalysis: (aiAnalysisResult.projectAnalysis || []).map((project: any) => ({
+        projectName: project.project || project.projectName || '项目',
+        description: project.description || `${project.project || '项目'}的开发工作`,
+        techStack: project.techDepth || project.techStack || [],
+        complexity: project.complexity || '中等',
+        impact: project.achievements || project.impact || '业务价值贡献',
+        role: project.role || '开发工程师',
+        highlights: project.highlights || [],
+        techDepth: project.techDepth || [],
+        interviewQuestions: project.interviewQuestions || []
+      })),
+      
+      // 技能评估
+      skillAssessment: aiAnalysisResult.skillAssessment || {},
+      
+      // 职业发展建议
       careerSuggestions: aiAnalysisResult.careerSuggestions || [],
-      roleMatchingAnalysis: aiAnalysisResult.roleMatchingAnalysis || {},
-      skillAssessment: aiAnalysisResult.skillAssessment || {}
+      
+      // 岗位匹配分析
+      roleMatchingAnalysis: aiAnalysisResult.roleMatchingAnalysis || {}
     } : {
       hasAIAnalysis: false,
       message: "AI分析正在处理中，请稍后查看"
@@ -244,11 +293,18 @@ ${content}
     }
   ],
   "simulatedInterview": {
-    "architectureDesign": ["基于简历中实际架构经验的2个系统设计题"],
+    "architectureDesign": ["基于简历中实际架构经验的5-8个系统设计题，涵盖高可用、扩展性、性能优化等维度"],
     "techDepth": {
-      "核心技术名": ["基于简历经验的3个原理级问题"]
+      "核心技术名1": ["基于简历经验的5-8个深度原理问题，从基础概念到高级应用"],
+      "核心技术名2": ["基于简历经验的5-8个深度原理问题，从基础概念到高级应用"],
+      "核心技术名3": ["基于简历经验的5-8个深度原理问题，从基础概念到高级应用"]
     },
-    "leadership": ["基于简历中团队管理经验的2个场景题"]
+    "algorithmCoding": ["基于技术栈的5-8个算法编程题，难度从中等到困难"],
+    "systemDesign": ["基于项目经验的5-8个系统设计题，涵盖分布式、微服务、数据库设计等"],
+    "leadership": ["基于简历中团队管理经验的5-8个场景题，涵盖冲突解决、技术决策、团队建设等"],
+    "problemSolving": ["基于实际工作场景的5-8个问题解决题，测试分析和解决复杂技术问题的能力"],
+    "projectExperience": ["针对简历中具体项目的5-8个深度追问，考察项目细节和技术选型"],
+    "industryInsight": ["基于专业领域的5-8个行业洞察题，考察技术趋势理解和前瞻性思维"]
   },
   "experienceLevel": {
     "level": "资深专家|高级工程师|中级工程师|初级工程师",
@@ -261,6 +317,16 @@ ${content}
     "岗位类型": "匹配度百分比（基于实际经验）"
   }
 }
+
+**模拟面试题库生成要求**：
+1. 每个方向生成5-8个高质量问题，确保覆盖不同难度层次
+2. 问题必须与候选人的实际经验和技术栈高度相关
+3. 避免通用性问题，专注于个性化的深度考察
+4. 技术深度问题需要覆盖候选人最强的3个核心技术
+5. 系统设计题要结合候选人的实际项目规模和复杂度
+6. 领导力问题要基于候选人的实际管理经验和团队规模
+7. 问题描述要具体明确，避免过于宽泛
+8. 每类问题按难度递增排序：基础→进阶→高级→专家级
 
 **关键要求（违反将被拒绝）**：
 1. 技术栈必须按dominanceScore降序排列，架构师相关技术必须排在最前面
@@ -283,11 +349,15 @@ ${content}
 现在开始分析，只返回JSON对象：`
 
   try {
-    const response = await (deepseek as any).callDeepSeek(prompt, 0.1, 6000)
+    const response = await (deepseek as any).callDeepSeek(prompt, 0.1, 8192)
     
-    // 尝试解析JSON响应 - 强化清理逻辑
+    // 尝试解析JSON响应 - 增强容错能力处理截断响应
     let parsedAnalysis
     try {
+      console.log("AI响应长度:", response.length)
+      console.log("AI响应开头:", response.substring(0, 200))
+      console.log("AI响应结尾:", response.substring(Math.max(0, response.length - 200)))
+      
       // 更强力的清理markdown标记和额外文本
       let cleaned = response
         .replace(/```json\s*/gi, "")        // 移除 ```json
@@ -306,6 +376,26 @@ ${content}
         }
       }
       
+      // 处理可能的截断JSON - 尝试修复不完整的JSON
+      if (!cleaned.endsWith("}")) {
+        console.log("检测到可能的JSON截断，尝试修复...")
+        
+        // 尝试找到最后一个完整的字段并关闭JSON
+        const lastCompleteFieldMatch = cleaned.match(/.*[,\}]\s*$/);
+        if (lastCompleteFieldMatch) {
+          cleaned = lastCompleteFieldMatch[0].replace(/,$/, "") + "}";
+        } else {
+          // 如果找不到完整字段，尝试在最后一个引号处截断
+          const lastQuoteIndex = cleaned.lastIndexOf('"');
+          if (lastQuoteIndex > 0) {
+            cleaned = cleaned.substring(0, lastQuoteIndex + 1) + "}";
+          } else {
+            throw new Error("无法修复截断的JSON");
+          }
+        }
+        console.log("修复后的JSON长度:", cleaned.length)
+      }
+      
       // 解析JSON
       parsedAnalysis = JSON.parse(cleaned)
       
@@ -322,9 +412,22 @@ ${content}
       console.log("AI分析结果解析成功:", Object.keys(parsedAnalysis))
       console.log("技术栈排序验证 - 前3项:", parsedAnalysis.techStack?.slice(0, 3).map(t => `${t.technology}(${t.dominanceScore})`))
       
+      // 验证面试题库完整性，但不使用备用题库填充
+      if (parsedAnalysis.simulatedInterview) {
+        const interview = parsedAnalysis.simulatedInterview
+        const requiredCategories = ['architectureDesign', 'techDepth', 'algorithmCoding', 'systemDesign', 'leadership', 'problemSolving', 'projectExperience', 'industryInsight']
+        
+        for (const category of requiredCategories) {
+          if (!interview[category] || (Array.isArray(interview[category]) && interview[category].length === 0)) {
+            console.log(`检测到面试题库类别 ${category} 缺失或为空 - 保持AI原始结果`)
+          }
+        }
+      }
+      
     } catch (parseError) {
       console.warn("AI返回的不是有效JSON，使用备用解析方法:", parseError)
-      console.log("原始响应前500字符:", response.substring(0, 500))
+      console.log("原始响应长度:", response.length)
+      console.log("解析错误详情:", parseError.message)
       parsedAnalysis = await generateFallbackAnalysis(content)
     }
     
@@ -346,8 +449,9 @@ ${content}
   }
 }
 
+
 async function generateFallbackAnalysis(content: string) {
-  // 备用分析逻辑 - 基于关键词匹配
+  // 备用分析逻辑 - 基于关键词匹配，不生成面试题
   const techKeywords = extractTechKeywords(content)
   
   return {
@@ -355,6 +459,7 @@ async function generateFallbackAnalysis(content: string) {
       technology: tech,
       category: categorizeTech(tech),
       proficiency: "中级",
+      dominanceScore: Math.max(60, 100 - index * 5),
       valueScore: Math.max(60, 100 - index * 5),
       evidenceCount: 1,
       lastUsed: "近期"
@@ -365,13 +470,17 @@ async function generateFallbackAnalysis(content: string) {
       "技术学习能力较强"
     ],
     projectAnalysis: [{
-      projectName: "项目经验",
+      project: "项目经验",
+      projectName: "项目经验", 
       description: "从简历中识别的项目经验",
       techStack: techKeywords.slice(0, 5),
+      techDepth: techKeywords.slice(0, 5),
       complexity: "中等",
       impact: "业务价值贡献",
+      achievements: "业务价值贡献",
       role: "开发工程师",
-      highlights: ["技术实现", "项目交付"]
+      highlights: ["技术实现", "项目交付"],
+      interviewQuestions: []
     }],
     skillAssessment: {
       technical: 75,
@@ -385,16 +494,19 @@ async function generateFallbackAnalysis(content: string) {
       reasoning: "基于项目复杂度和技术栈广度评估"
     },
     specializations: determineSpecializations(techKeywords),
+    coreExpertise: determineSpecializations(techKeywords),
     careerSuggestions: [
       "继续深化主技术栈",
-      "增强系统设计能力",
+      "增强系统设计能力", 
       "提升项目管理技能"
     ],
     roleMatchingAnalysis: {
       "前端开发": 80,
       "全栈开发": 75,
       "后端开发": 70
-    }
+    },
+    // 备用分析不生成模拟面试题，保持为null
+    simulatedInterview: null
   }
 }
 

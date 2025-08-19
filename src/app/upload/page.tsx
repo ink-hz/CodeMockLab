@@ -30,6 +30,16 @@ export default function UploadPage() {
     checkExistingResume()
   }, [])
 
+  // 当detailedAnalysis数据加载完成时，自动展开报告
+  useEffect(() => {
+    console.log("详细分析数据变化:", detailedAnalysis)
+    console.log("showReport状态:", showReport)
+    if (detailedAnalysis && (detailedAnalysis.hasAIProfile || detailedAnalysis.hasAIAnalysis)) {
+      console.log("设置showReport为true")
+      setShowReport(true)
+    }
+  }, [detailedAnalysis])
+
   const checkExistingResume = async () => {
     try {
       const response = await fetch("/api/resume/check")
@@ -53,6 +63,7 @@ export default function UploadPage() {
               console.log("技术栈数据:", aiResult.data.techStack)
               setAiProfile(aiResult.data)
               setDetailedAnalysis(aiResult.data)
+              setShowReport(true) // 自动展开已有的AI分析报告
             } else {
               console.log("没有AI分析数据或获取失败")
             }
@@ -469,6 +480,96 @@ export default function UploadPage() {
                                         </div>
                                       ))}
                                     </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 系统设计题 */}
+                          {detailedAnalysis.simulatedInterview.systemDesign && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Layers className="h-4 w-4 text-indigo-600" />
+                                系统设计题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.systemDesign.map((question: string, index: number) => (
+                                  <div key={index} className="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-indigo-800">Q{index + 1}:</p>
+                                    <p className="text-indigo-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 算法编程题 */}
+                          {detailedAnalysis.simulatedInterview.algorithmCoding && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Brain className="h-4 w-4 text-red-600" />
+                                算法编程题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.algorithmCoding.map((question: string, index: number) => (
+                                  <div key={index} className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-red-800">Q{index + 1}:</p>
+                                    <p className="text-red-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 问题解决题 */}
+                          {detailedAnalysis.simulatedInterview.problemSolving && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Lightbulb className="h-4 w-4 text-orange-600" />
+                                问题解决题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.problemSolving.map((question: string, index: number) => (
+                                  <div key={index} className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-orange-800">Q{index + 1}:</p>
+                                    <p className="text-orange-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 项目经验深挖题 */}
+                          {detailedAnalysis.simulatedInterview.projectExperience && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Target className="h-4 w-4 text-cyan-600" />
+                                项目经验深挖题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.projectExperience.map((question: string, index: number) => (
+                                  <div key={index} className="bg-cyan-50 border-l-4 border-cyan-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-cyan-800">Q{index + 1}:</p>
+                                    <p className="text-cyan-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 行业洞察题 */}
+                          {detailedAnalysis.simulatedInterview.industryInsight && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4 text-teal-600" />
+                                行业洞察题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.industryInsight.map((question: string, index: number) => (
+                                  <div key={index} className="bg-teal-50 border-l-4 border-teal-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-teal-800">Q{index + 1}:</p>
+                                    <p className="text-teal-700 mt-1">{question}</p>
                                   </div>
                                 ))}
                               </div>

@@ -78,6 +78,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     position, 
     level, 
     requirements,
+    jobResponsibilities,
+    jobRequirements,
     isDefault = false 
   } = body
 
@@ -103,6 +105,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
         data: {
           customCompany,
           requirements,
+          jobResponsibilities,
+          jobRequirements,
           usageCount: existingPreference.usageCount + 1,
           lastUsedAt: new Date(),
           isDefault
@@ -131,6 +135,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
           position,
           level,
           requirements,
+          jobResponsibilities,
+          jobRequirements,
           isDefault,
           usageCount: 1,
           lastUsedAt: new Date()

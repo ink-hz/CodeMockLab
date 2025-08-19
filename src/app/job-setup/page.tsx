@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,8 @@ interface JobPreference {
   position: string | null
   level: string | null
   requirements: string | null
+  jobResponsibilities?: string | null
+  jobRequirements?: string | null
   isDefault: boolean
   usageCount: number
   lastUsedAt: string
@@ -38,6 +40,8 @@ interface JobPreference {
 export default function JobSetupPage() {
   const { data: session } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const nextRoute = searchParams.get('next') // 获取跳转参数
   const [isLoading, setIsLoading] = useState(false)
   const [loadingPreferences, setLoadingPreferences] = useState(true)
   const [savedPreferences, setSavedPreferences] = useState<JobPreference[]>([])
@@ -47,7 +51,9 @@ export default function JobSetupPage() {
     position: "",
     level: "",
     requirements: "",
-    customCompany: ""
+    customCompany: "",
+    jobResponsibilities: "",  // 工作职责
+    jobRequirements: ""       // 任职要求
   })
 
   // 加载用户的岗位偏好设置
@@ -66,7 +72,9 @@ export default function JobSetupPage() {
               position: data.position || "", 
               level: data.level || "",
               requirements: data.requirements || "",
-              customCompany: data.customCompany || ""
+              customCompany: data.customCompany || "",
+              jobResponsibilities: data.jobResponsibilities || "",
+              jobRequirements: data.jobRequirements || ""
             })
           }
         }
@@ -94,7 +102,9 @@ export default function JobSetupPage() {
       position: preference.position || "",
       level: preference.level || "",
       requirements: preference.requirements || "",
-      customCompany: preference.customCompany || ""
+      customCompany: preference.customCompany || "",
+      jobResponsibilities: preference.jobResponsibilities || "",
+      jobRequirements: preference.jobRequirements || ""
     })
   }
 
@@ -129,6 +139,8 @@ export default function JobSetupPage() {
           position: formData.position,
           level: formData.level,
           requirements: formData.requirements,
+          jobResponsibilities: formData.jobResponsibilities,
+          jobRequirements: formData.jobRequirements,
           isDefault
         })
       })
@@ -156,7 +168,9 @@ export default function JobSetupPage() {
       position: "",
       level: "",
       requirements: "",
-      customCompany: ""
+      customCompany: "",
+      jobResponsibilities: "",
+      jobRequirements: ""
     })
   }
 
@@ -198,7 +212,9 @@ export default function JobSetupPage() {
         company: formData.company === "其他" ? formData.customCompany : formData.company,
         position: formData.position,
         level: formData.level,
-        requirements: normalizeRequirements(formData.requirements)
+        requirements: normalizeRequirements(formData.requirements),
+        jobResponsibilities: formData.jobResponsibilities?.trim() || "",
+        jobRequirements: formData.jobRequirements?.trim() || ""
       }
 
       // 保存到会话存储用于面试使用
@@ -209,8 +225,14 @@ export default function JobSetupPage() {
         await saveAsPreference(false) // 不设为默认，只记录使用历史
       }
       
-      // 跳转到面试页面
-      router.push("/interview/start")
+      // 根据 next 参数决定跳转目标
+      if (nextRoute === 'interview') {
+        // 从模式选择页面过来的，直接进入实时生成面试
+        router.push("/interview/start?mode=ai-generate")
+      } else {
+        // 默认跳转到刷题模式选择页面
+        router.push("/interview/mode-select")
+      }
     } catch (error) {
       alert("保存失败，请重试")
     } finally {
@@ -389,17 +411,50 @@ export default function JobSetupPage() {
                   </Select>
                 </div>
 
+                {/* 工作职责 */}
                 <div className="space-y-2">
-                  <Label htmlFor="requirements">技能要求</Label>
+                  <Label htmlFor="jobResponsibilities">工作职责</Label>
+                  <Textarea
+                    id="jobResponsibilities"
+                    value={formData.jobResponsibilities}
+                    onChange={(e) => setFormData(prev => ({ ...prev, jobResponsibilities: e.target.value }))}
+                    placeholder="请粘贴岗位JD中的完整工作职责描述..."
+                    rows={6}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    详细的工作职责描述将帮助AI生成更精准的项目经验和架构设计类题目
+                  </p>
+                </div>
+
+                {/* 任职要求 */}
+                <div className="space-y-2">
+                  <Label htmlFor="jobRequirements">任职要求</Label>
+                  <Textarea
+                    id="jobRequirements"
+                    value={formData.jobRequirements}
+                    onChange={(e) => setFormData(prev => ({ ...prev, jobRequirements: e.target.value }))}
+                    placeholder="请粘贴岗位JD中的完整任职要求..."
+                    rows={6}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    任职要求将帮助AI生成针对性的技术深度、经验层次和软技能类题目
+                  </p>
+                </div>
+
+                {/* 技能要求（简化版，作为补充） */}
+                <div className="space-y-2">
+                  <Label htmlFor="requirements">核心技术栈（可选）</Label>
                   <Textarea
                     id="requirements"
                     value={formData.requirements}
                     onChange={(e) => setFormData(prev => ({ ...prev, requirements: e.target.value }))}
-                    placeholder="请输入技能要求，用逗号分隔&#10;例如：React, TypeScript, Node.js, 系统设计, 数据结构与算法"
-                    rows={4}
+                    placeholder="如果上述内容未涵盖核心技术，可补充关键技术栈，用逗号分隔&#10;例如：Golang, Kubernetes, Redis, MySQL, 微服务架构"
+                    rows={3}
                   />
                   <p className="text-xs text-muted-foreground">
-                    AI将根据这些技能要求为您生成相应的面试题目
+                    此字段为补充信息，主要用于技术栈覆盖度检查
                   </p>
                 </div>
 
@@ -423,7 +478,7 @@ export default function JobSetupPage() {
                     </Button>
                     <Button 
                       type="submit" 
-                      disabled={isLoading || !formData.company || !formData.position || !formData.level}
+                      disabled={isLoading || !formData.company || !formData.position || !formData.level || !formData.jobResponsibilities?.trim() || !formData.jobRequirements?.trim()}
                     >
                       {isLoading ? "保存中..." : "开始面试"}
                       <ArrowRight className="ml-2 h-4 w-4" />

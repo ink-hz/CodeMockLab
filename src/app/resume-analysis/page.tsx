@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, Brain, BarChart3, Star, Lightbulb, Target, TrendingUp, Users, MessageSquare, Layers } from "lucide-react"
+import { ArrowLeft, Brain, BarChart3, Star, Lightbulb, Target, TrendingUp, Users, MessageSquare, Layers, CheckCircle } from "lucide-react"
 
 export default function ResumeAnalysisPage() {
   const { data: session, status } = useSession()
@@ -17,10 +17,29 @@ export default function ResumeAnalysisPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // 只在确认未认证且不是loading状态时重定向
     if (status === "unauthenticated") {
+      console.log("用户未认证，重定向到登录页面")
       router.push("/login")
     }
   }, [status, router])
+  
+  // 如果还在认证检查中，显示加载状态
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-lg text-muted-foreground">验证用户身份...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // 如果未认证，不渲染任何内容（避免闪烁）
+  if (status === "unauthenticated") {
+    return null
+  }
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -57,7 +76,7 @@ export default function ResumeAnalysisPage() {
     }
   }
 
-  if (status === "loading" || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -110,6 +129,55 @@ export default function ResumeAnalysisPage() {
         </div>
 
         <div className="max-w-6xl mx-auto space-y-6">
+          {/* 统计信息卡片 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Star className="h-8 w-8 text-yellow-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">技术等级</p>
+                    <p className="font-semibold">
+                      {aiProfile?.experienceLevel === 'junior' ? '初级工程师' : 
+                       aiProfile?.experienceLevel === 'mid' ? '中级工程师' : 
+                       aiProfile?.experienceLevel === 'senior' ? '高级工程师' : 
+                       aiProfile?.experienceLevel === 'lead' ? '技术专家' : 
+                       aiProfile?.experienceLevel?.includes('专家') ? '资深专家' : '中级工程师'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="h-8 w-8 text-blue-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">技术栈数量</p>
+                    <p className="font-semibold">
+                      {aiProfile?.stats?.totalTechnologies || aiProfile?.techStack?.length || 0} 项技术
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-8 w-8 text-green-500" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">市场价值评分</p>
+                    <p className="font-semibold">
+                      {aiProfile?.stats?.avgValueScore || 75}/100
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* 经验等级评估 */}
           <Card>
             <CardHeader>
@@ -333,6 +401,81 @@ export default function ResumeAnalysisPage() {
                     </div>
                   )}
 
+                  {/* 系统设计题 */}
+                  {aiProfile.simulatedInterview.systemDesign && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-indigo-600">系统设计题</h4>
+                      <div className="space-y-2">
+                        {aiProfile.simulatedInterview.systemDesign.map((question: string, index: number) => (
+                          <div key={index} className="p-3 bg-indigo-50 rounded-lg">
+                            <span className="text-sm font-medium text-indigo-800">Q{index + 1}：</span>
+                            <span className="text-sm text-indigo-700 ml-2">{question}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 算法编程题 */}
+                  {aiProfile.simulatedInterview.algorithmCoding && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-red-600">算法编程题</h4>
+                      <div className="space-y-2">
+                        {aiProfile.simulatedInterview.algorithmCoding.map((question: string, index: number) => (
+                          <div key={index} className="p-3 bg-red-50 rounded-lg">
+                            <span className="text-sm font-medium text-red-800">Q{index + 1}：</span>
+                            <span className="text-sm text-red-700 ml-2">{question}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 问题解决题 */}
+                  {aiProfile.simulatedInterview.problemSolving && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-orange-600">问题解决题</h4>
+                      <div className="space-y-2">
+                        {aiProfile.simulatedInterview.problemSolving.map((question: string, index: number) => (
+                          <div key={index} className="p-3 bg-orange-50 rounded-lg">
+                            <span className="text-sm font-medium text-orange-800">Q{index + 1}：</span>
+                            <span className="text-sm text-orange-700 ml-2">{question}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 项目经验深挖题 */}
+                  {aiProfile.simulatedInterview.projectExperience && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-cyan-600">项目经验深挖题</h4>
+                      <div className="space-y-2">
+                        {aiProfile.simulatedInterview.projectExperience.map((question: string, index: number) => (
+                          <div key={index} className="p-3 bg-cyan-50 rounded-lg">
+                            <span className="text-sm font-medium text-cyan-800">Q{index + 1}：</span>
+                            <span className="text-sm text-cyan-700 ml-2">{question}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 行业洞察题 */}
+                  {aiProfile.simulatedInterview.industryInsight && (
+                    <div>
+                      <h4 className="font-semibold mb-3 text-teal-600">行业洞察题</h4>
+                      <div className="space-y-2">
+                        {aiProfile.simulatedInterview.industryInsight.map((question: string, index: number) => (
+                          <div key={index} className="p-3 bg-teal-50 rounded-lg">
+                            <span className="text-sm font-medium text-teal-800">Q{index + 1}：</span>
+                            <span className="text-sm text-teal-700 ml-2">{question}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* 领导力题 */}
                   {aiProfile.simulatedInterview.leadership && (
                     <div>
@@ -375,6 +518,71 @@ export default function ResumeAnalysisPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* 简历评价与优化建议 */}
+          <Card className="border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-800">
+                <CheckCircle className="h-5 w-5" />
+                简历评价与优化建议
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-green-100 p-4 rounded-lg">
+                    <h4 className="font-semibold text-green-800 mb-2">✅ 简历优势</h4>
+                    <ul className="text-sm text-green-700 space-y-1">
+                      {aiProfile?.techStack?.length > 8 && (
+                        <li>• 技术栈丰富，覆盖多个领域</li>
+                      )}
+                      {aiProfile?.stats?.avgValueScore > 80 && (
+                        <li>• 掌握高价值技术，市场竞争力强</li>
+                      )}
+                      {aiProfile?.projectAnalysis?.some((p: any) => p.complexity === '高' || p.complexity === '极高') && (
+                        <li>• 有复杂项目经验，技术深度较好</li>
+                      )}
+                      {aiProfile?.experienceLevel === 'senior' || aiProfile?.experienceLevel === 'lead' || aiProfile?.experienceLevel?.includes('专家') ? (
+                        <li>• 技术等级较高，有资深经验</li>
+                      ) : (
+                        <li>• 基础技能扎实，有良好发展潜力</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="bg-orange-100 p-4 rounded-lg">
+                    <h4 className="font-semibold text-orange-800 mb-2">⚡ 优化建议</h4>
+                    <ul className="text-sm text-orange-700 space-y-1">
+                      {!aiProfile?.projectAnalysis?.length && (
+                        <li>• 建议增加项目经验描述，突出技术应用</li>
+                      )}
+                      {aiProfile?.stats?.avgValueScore < 70 && (
+                        <li>• 考虑学习更多高价值技术，提升竞争力</li>
+                      )}
+                      {!aiProfile?.skillAssessment?.leadership && (
+                        <li>• 可以增加团队协作和领导力相关经验</li>
+                      )}
+                      <li>• 建议量化项目成果，如性能提升、用户增长等</li>
+                      <li>• 可以添加开源贡献或技术博客链接</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="bg-blue-100 p-4 rounded-lg">
+                  <h4 className="font-semibold text-blue-800 mb-2">🎯 面试准备建议</h4>
+                  <div className="text-sm text-blue-700 space-y-2">
+                    <p>基于您的技术栈分析，建议重点准备以下面试内容：</p>
+                    <ul className="space-y-1 ml-4">
+                      {aiProfile?.techStack?.slice(0, 3).map((tech: any, index: number) => (
+                        <li key={index}>• {tech.technology} 的深度原理和最佳实践</li>
+                      ))}
+                      <li>• 系统设计能力和架构思维的展示</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* 底部操作按钮 */}
           <div className="flex justify-center gap-4 py-6">
