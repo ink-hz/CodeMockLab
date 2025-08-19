@@ -322,6 +322,10 @@ ${qaList.map((qa, i) => `
     console.log("Temperature:", temperature)
     console.log("Max tokens:", maxTokens)
 
+    // 添加超时控制（8秒）
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    
     const response = await fetch(this.apiUrl, {
       method: "POST",
       headers: {
@@ -343,8 +347,16 @@ ${qaList.map((qa, i) => `
         temperature,
         max_tokens: maxTokens,
         // response_format: { type: "json_object" } // DeepSeek可能不支持这个参数
-      })
+      }),
+      signal: controller.signal
+    }).catch(err => {
+      if (err.name === 'AbortError') {
+        throw new Error('DeepSeek API调用超时')
+      }
+      throw err
     })
+    
+    clearTimeout(timeoutId)
 
     console.log("Response status:", response.status)
     console.log("Response ok:", response.ok)

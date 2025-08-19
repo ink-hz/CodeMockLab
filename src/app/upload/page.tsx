@@ -63,26 +63,53 @@ export default function UploadPage() {
     const formData = new FormData()
     formData.append("file", file)
 
+    // 将progressTimer移到try外面，确保可以在catch和finally中访问
+    let progressTimer: NodeJS.Timeout | null = null
+    let isCompleted = false
+
     try {
       setAnalysisStage("正在上传文件...")
+      console.log("开始上传文件:", file.name, "大小:", file.size, "类型:", file.type)
       
-      // 模拟上传进度
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 10
-        })
-      }, 200)
+      // 启动进度条
+      progressTimer = setInterval(() => {
+        if (!isCompleted) {
+          setUploadProgress(prev => {
+            // 更平滑的进度增长，最高到95%
+            if (prev < 30) return prev + 10
+            if (prev < 60) return prev + 5
+            if (prev < 80) return prev + 3
+            if (prev < 95) return prev + 1
+            return prev
+          })
+        }
+      }, 300)
 
+      // 添加超时控制（30秒）
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      
+      console.log("发送上传请求到 /api/resume/upload")
       const response = await fetch("/api/resume/upload", {
         method: "POST",
         body: formData,
+        signal: controller.signal
+      }).catch(err => {
+        console.error("上传请求失败:", err)
+        if (err.name === 'AbortError') {
+          throw new Error('上传超时，请重试')
+        }
+        throw err
       })
-
-      clearInterval(progressInterval)
+      console.log("上传响应状态:", response.status)
+      
+      clearTimeout(timeoutId)
+      isCompleted = true
+      
+      // 清理进度条定时器
+      if (progressTimer) {
+        clearInterval(progressTimer)
+      }
       setUploadProgress(100)
       setAnalysisStage("处理完成")
 
@@ -118,11 +145,19 @@ export default function UploadPage() {
         setError(errorMsg)
         console.error("上传失败:", result)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("上传异常:", error)
-      setError("网络错误，请检查连接后重试")
+      // 清理进度条定时器
+      if (progressTimer) {
+        clearInterval(progressTimer)
+      }
+      setError(error.message || "网络错误，请检查连接后重试")
     } finally {
       setIsUploading(false)
+      // 确保清理定时器
+      if (progressTimer) {
+        clearInterval(progressTimer)
+      }
     }
   }
 

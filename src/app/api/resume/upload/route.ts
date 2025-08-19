@@ -73,14 +73,22 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   console.log(`简历保存到数据库，ID: ${resume.id}`)
 
-  // 启动AI分析流程
+  // 启动AI分析流程（设置10秒超时）
   let aiAnalysisResult = null
   try {
     console.log("开始AI技术画像分析...")
-    aiAnalysisResult = await performAIAnalysis(resume.id, parsedContent.rawText)
+    
+    // 创建一个带超时的Promise
+    const aiAnalysisPromise = performAIAnalysis(resume.id, parsedContent.rawText)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('AI分析超时')), 10000)
+    )
+    
+    aiAnalysisResult = await Promise.race([aiAnalysisPromise, timeoutPromise])
     console.log("AI分析完成")
-  } catch (aiError) {
-    console.warn("AI分析失败，继续使用基础解析结果:", aiError)
+  } catch (aiError: any) {
+    console.warn("AI分析失败或超时，继续使用基础解析结果:", aiError.message)
+    // 不阻塞主流程
   }
 
   // 更新用户画像
