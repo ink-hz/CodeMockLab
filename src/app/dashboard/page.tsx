@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [resumeInfo, setResumeInfo] = useState<any>(null)
   const [hasResume, setHasResume] = useState(false)
+  const [aiProfile, setAiProfile] = useState<any>(null)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -35,8 +36,17 @@ export default function DashboardPage() {
       setHasResume(data.hasResume)
       setResumeInfo(data.resume)
       
-      // 如果已有简历，自动设置到第2步
-      if (data.hasResume) {
+      // 如果有简历，尝试获取AI分析数据
+      if (data.hasResume && data.resume.id) {
+        try {
+          const aiResponse = await fetch(`/api/resume/ai-profile/${data.resume.id}`)
+          const aiResult = await aiResponse.json()
+          if (aiResult.success && aiResult.data.hasAIProfile) {
+            setAiProfile(aiResult.data)
+          }
+        } catch (aiError) {
+          console.log("AI分析数据获取失败，使用基础数据:", aiError)
+        }
         setCurrentStep(2)
       }
     } catch (error) {
@@ -132,24 +142,53 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => router.push("/upload")}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    更新简历
-                  </Button>
+                  <div className="flex gap-2">
+                    {aiProfile && (
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => router.push("/resume-analysis")}
+                      >
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        查看AI分析报告
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => router.push("/upload")}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      更新简历
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
-              {resumeInfo.techKeywords && resumeInfo.techKeywords.length > 0 && (
+              {(aiProfile?.techStack || resumeInfo.techKeywords) && (
                 <CardContent>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {aiProfile?.techStack ? "核心技术栈（按重要性排序）" : "识别的技能"}
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    {resumeInfo.techKeywords.slice(0, 8).map((keyword: string, index: number) => (
-                      <Badge key={index} variant="secondary">
-                        {keyword}
-                      </Badge>
-                    ))}
+                    {aiProfile?.techStack ? (
+                      // 显示AI分析的技术栈，按valueScore排序
+                      aiProfile.techStack.slice(0, 8).map((tech: any, index: number) => (
+                        <Badge 
+                          key={index} 
+                          variant={tech.valueScore >= 90 ? "default" : "secondary"}
+                          className={tech.valueScore >= 90 ? "bg-blue-600 text-white" : ""}
+                        >
+                          {tech.technology} ({tech.valueScore})
+                        </Badge>
+                      ))
+                    ) : (
+                      // 备用：显示基础解析的技术关键词
+                      resumeInfo.techKeywords.slice(0, 8).map((keyword: string, index: number) => (
+                        <Badge key={index} variant="secondary">
+                          {keyword}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               )}

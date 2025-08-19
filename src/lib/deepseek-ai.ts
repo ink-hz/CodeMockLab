@@ -34,13 +34,13 @@ export class DeepSeekAI {
   ): Promise<InterviewQuestion[]> {
     const prompt = `你是一位资深的技术面试官，拥有10年以上的面试经验。请基于以下信息生成${count}道高质量的技术面试题。
 
-## 🎯 目标岗位分析（主要依据，权重70%）
+## 🎯 目标岗位分析（基础框架，权重40%）
 - 公司：${jobData.company}
 - 职位：${jobData.position}
 - 级别：${jobData.level}
 - 核心技术要求：${jobData.requirements?.join(", ") || "未知"}
 
-## 🤖 AI技术画像分析（智能匹配，权重30%）
+## 🤖 AI技术画像分析（核心依据，权重60%）
 ${aiProfile ? `
 ### 经验等级评估
 - AI评估等级：${aiProfile.experienceLevel || "中级"}（置信度：${Math.round((aiProfile.experienceLevelConfidence || 0.7) * 100)}%）
@@ -76,20 +76,29 @@ ${aiProfile.roleMatchingAnalysis ?
 `}
 
 ## 📋 智能问题生成策略
-1. **优先级原则**：70%的问题必须基于目标岗位的核心技术要求
-2. **AI画像适配**：30%的问题基于AI技术画像分析，考虑：
+1. **AI画像驱动**：60%的问题必须深度结合候选人的AI技术画像分析
+2. **岗位需求匹配**：40%的问题基于目标岗位的核心技术要求
+3. **个性化出题**：基于AI技术画像分析，重点考虑：
    - 候选人的技术栈价值评分
    - 技术专长领域匹配度
    - 项目复杂度和经验深度
    - AI评估的经验等级
-3. **智能难度调节**：
+4. **智能难度调节**：
    - AI评估为高级/专家：60%困难，40%中等
    - AI评估为中级：20%简单，50%中等，30%困难  
    - AI评估为初级：40%简单，50%中等，10%困难
-4. **匹配度优化**：
+5. **匹配度优化**：
    - 高匹配度(80%+)：深度技能考察 + 架构设计能力
    - 中匹配度(60-80%)：核心技能 + 学习适应能力
    - 低匹配度(<60%)：基础能力 + 逻辑思维 + 技术迁移能力
+
+## 🎯 AI画像驱动的出题重点
+基于候选人的技术画像，重点生成以下类型的问题：
+1. **技术深度验证**：针对价值评分最高的3个技术栈进行深度考察
+2. **项目经验挖掘**：基于AI分析的真实项目经验出题，避免泛泛而谈
+3. **专长领域聚焦**：围绕候选人的核心专长领域设计架构类问题
+4. **经验等级匹配**：根据AI评估的真实经验等级调整问题复杂度
+5. **角色适配性**：结合岗位匹配度分析，考察关键能力gap
 
 ## 🔍 AI驱动的面试重点
 ${aiProfile ? `
@@ -98,6 +107,7 @@ ${aiProfile ? `
 - **专长领域验证**：验证在${aiProfile.specializations?.slice(0, 2).join("、") || "专业领域"}的实际应用能力
 - **经验等级匹配**：针对${aiProfile.experienceLevel || "中级"}水平设计合适难度的问题
 - **技能迁移评估**：考察从${aiProfile.techStack?.slice(0, 2).map((t: any) => t.technology).join("、") || "现有技术"}向岗位要求技术的学习能力
+- **真实项目深挖**：${aiProfile.projectAnalysis?.length > 0 ? `重点围绕候选人的实际项目"${aiProfile.projectAnalysis[0]?.projectName || "核心项目"}"等进行深度技术考察` : "结合实际项目经验进行考察"}
 ` : `
 ### 传统简历分析考察重点：
 - 根据简历信息进行基础技能评估
@@ -322,9 +332,9 @@ ${qaList.map((qa, i) => `
     console.log("Temperature:", temperature)
     console.log("Max tokens:", maxTokens)
 
-    // 添加超时控制（8秒）
+    // 添加超时控制（30秒，给AI分析更多时间）
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
     
     const response = await fetch(this.apiUrl, {
       method: "POST",

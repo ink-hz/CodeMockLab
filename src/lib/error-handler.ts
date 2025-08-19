@@ -92,9 +92,12 @@ export const errorFactory = {
     new AppError(`不支持的文件类型，支持: ${supportedTypes.join(', ')}`, ErrorCode.UNSUPPORTED_FILE_TYPE, 400)
 }
 
+// 判断是否为开发环境
+const isDevelopment = process.env.NODE_ENV === 'development'
+
 // 错误处理中间件函数
 export function handleApiError(error: unknown): NextResponse {
-  // 记录错误
+  // 记录完整错误信息到后端日志
   logger.error('API Error:', error)
 
   // 如果是自定义错误
@@ -104,7 +107,8 @@ export function handleApiError(error: unknown): NextResponse {
         success: false,
         error: error.message,
         code: error.code,
-        details: error.details
+        // 只在开发环境返回详细信息
+        ...(isDevelopment && { details: error.details })
       },
       { status: error.statusCode }
     )
@@ -120,7 +124,14 @@ export function handleApiError(error: unknown): NextResponse {
         {
           success: false,
           error: "数据重复，记录已存在",
-          code: ErrorCode.DATABASE_ERROR
+          code: ErrorCode.DATABASE_ERROR,
+          // 开发环境显示详细错误
+          ...(isDevelopment && { 
+            details: {
+              prismaCode: dbError.code,
+              target: dbError.meta?.target
+            }
+          })
         },
         { status: 409 }
       )
@@ -131,19 +142,53 @@ export function handleApiError(error: unknown): NextResponse {
         {
           success: false,
           error: "记录未找到",
-          code: ErrorCode.DATABASE_ERROR
+          code: ErrorCode.DATABASE_ERROR,
+          ...(isDevelopment && { 
+            details: { prismaCode: dbError.code }
+          })
         },
         { status: 404 }
       )
     }
+
+    // 其他数据库错误（如PostgreSQL错误）
+    if (dbError.code?.startsWith?.('22')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "数据格式错误",
+          code: ErrorCode.DATABASE_ERROR,
+          ...(isDevelopment && { 
+            details: {
+              dbCode: dbError.code,
+              message: dbError.message
+            }
+          })
+        },
+        { status: 400 }
+      )
+    }
   }
 
+  // 检查是否为其他已知错误类型
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  
+  // 过滤敏感信息
+  const isSensitiveError = /password|secret|key|token|database|connection|prisma|postgres/i.test(errorMessage)
+  
   // 通用错误
   return NextResponse.json(
     {
       success: false,
-      error: "服务器内部错误",
-      code: ErrorCode.INTERNAL_SERVER_ERROR
+      error: isSensitiveError ? "服务器内部错误" : "操作失败，请稍后重试",
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+      // 只在开发环境显示原始错误
+      ...(isDevelopment && { 
+        details: {
+          originalError: errorMessage,
+          type: error instanceof Error ? error.constructor.name : typeof error
+        }
+      })
     },
     { status: 500 }
   )

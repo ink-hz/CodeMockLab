@@ -1,6 +1,5 @@
-// Temporarily comment out pdf-parse due to import issues
-// import pdfParse from 'pdf-parse'
-// import mammoth from 'mammoth'
+import pdfParse from 'pdf-parse'
+import mammoth from 'mammoth'
 
 export interface ParsedResume {
   rawText: string
@@ -33,63 +32,48 @@ const TECH_KEYWORDS = [
   // 后端技术
   'Node.js', 'Express', 'Nest.js', 'Spring', 'Django', 'Flask', 'Laravel', 'Rails', 'ASP.NET',
   // 数据库
-  'MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'SQL Server', 'Elasticsearch',
-  // 云服务
-  'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Jenkins', 'CI/CD', 'Git', 'GitHub', 'GitLab',
+  'MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'SQL Server', 'Elasticsearch', 'ClickHouse',
+  // 大数据和AI
+  'Kafka', 'Pulsar', 'Flink', 'Spark', 'Hadoop', 'TensorFlow', 'PyTorch', 'CUDA', 'cuDNN', 'NCCL',
+  'Megatron-LM', 'DeepSpeed', 'Transformer', 'CNN', 'RNN', 'GPT',
+  // 云服务和容器化
+  'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'K8s', 'Jenkins', 'CI/CD', 'Git', 'GitHub', 'GitLab',
   // 其他技术
-  'GraphQL', 'REST API', 'WebSocket', 'Microservices', 'DevOps', 'Linux', 'Nginx', 'Apache'
+  'GraphQL', 'REST API', 'WebSocket', 'Microservices', 'DevOps', 'Linux', 'Nginx', 'Apache',
+  // 图数据库和向量数据库
+  'Neo4j', 'ArangoDB', 'Pinecone', 'Weaviate', 'Milvus'
 ]
 
 export async function parseResume(buffer: Buffer, mimeType: string): Promise<ParsedResume> {
   let rawText = ''
   
   try {
-    // Temporarily use a simplified text extraction
-    // For PDF files, we'll use the file name and basic info
+    // 真实的文档解析
     if (mimeType === 'application/pdf') {
-      // Simulate PDF parsing - in production, use pdf-parse or similar
-      rawText = `
-        [PDF Resume Content]
-        
-        技能栈：
-        React, Vue, Angular, TypeScript, JavaScript, Node.js, Python
-        MySQL, PostgreSQL, MongoDB, Redis
-        Docker, Kubernetes, Git, Jenkins
-        
-        工作经验：
-        高级前端工程师 - 3年经验
-        全栈开发经验 - 熟练使用React和Node.js
-        
-        项目经验：
-        1. 电商平台开发 - React, TypeScript, Node.js
-        2. 微服务架构 - Docker, Kubernetes  
-        3. 数据分析平台 - Python, MongoDB
-        
-        教育背景：
-        计算机科学学士学位
-      `.trim()
+      console.log('开始解析PDF文件...')
+      const pdfData = await pdfParse(buffer)
+      rawText = pdfData.text
+      console.log(`PDF解析成功，提取到 ${rawText.length} 个字符`)
     } else if (mimeType.includes('word')) {
-      // Simulate Word parsing
-      rawText = `
-        [Word Resume Content]
-        
-        Similar content as PDF...
-      `.trim()
+      console.log('开始解析Word文件...')
+      const result = await mammoth.extractRawText({ buffer })
+      rawText = result.value
+      console.log(`Word解析成功，提取到 ${rawText.length} 个字符`)
     } else if (mimeType === 'text/plain') {
       // For text files, use the buffer content directly
       rawText = buffer.toString('utf-8')
+      console.log(`文本文件解析成功，提取到 ${rawText.length} 个字符`)
     } else {
       // For unsupported types, create basic content
       rawText = `Resume file uploaded. Type: ${mimeType}`
     }
 
-    // If rawText is still empty, create a default
+    // 清理文本中的无效字符，特别是null字符
+    rawText = cleanTextForDatabase(rawText)
+    
+    // If rawText is still empty, throw error instead of using fake data
     if (!rawText || rawText.trim().length === 0) {
-      rawText = `
-        技术栈：JavaScript, TypeScript, React, Node.js
-        经验：中级开发工程师
-        项目：Web应用开发经验
-      `.trim()
+      throw new Error('无法从文件中提取任何文本内容，请检查文件格式是否正确')
     }
 
     // 提取技术关键词
@@ -121,16 +105,8 @@ export async function parseResume(buffer: Buffer, mimeType: string): Promise<Par
     }
   } catch (error) {
     console.error('Resume parsing error:', error)
-    // Return a basic structure instead of throwing
-    return {
-      rawText: 'Resume parsing failed, using default analysis',
-      techKeywords: ['JavaScript', 'TypeScript', 'React'],
-      projects: [],
-      workExperience: [],
-      experienceLevel: 'MID',
-      education: [],
-      skills: ['JavaScript', 'TypeScript', 'React']
-    }
+    // Throw the error instead of returning fake data
+    throw new Error(`简历解析失败: ${error instanceof Error ? error.message : '未知错误'}`)
   }
 }
 
@@ -198,7 +174,7 @@ function extractWorkExperience(text: string): Array<{company: string, position: 
 
 function extractCompanyName(text: string): string {
   // 简单的公司名提取
-  const companies = ['腾讯', '阿里', '百度', '字节', '美团', '京东', '网易', '滴滴', '小米', '华为']
+  const companies = ['腾讯', '阿里', '百度', '字节', '美团', '京东', '网易', '滴滴', '小米', '华为', '深信服', '阿里巴巴', '蚂蚁', '滴滴出行']
   for (const company of companies) {
     if (text.includes(company)) {
       return company
@@ -208,7 +184,7 @@ function extractCompanyName(text: string): string {
 }
 
 function extractPosition(text: string): string {
-  const positions = ['高级工程师', '资深工程师', '工程师', '架构师', '技术专家', '开发工程师', '前端工程师', '后端工程师']
+  const positions = ['总架构师', '首席架构师', '技术总监', 'CTO', '技术专家', '架构师', '资深工程师', '高级工程师', '工程师', '开发工程师', '前端工程师', '后端工程师']
   for (const position of positions) {
     if (text.includes(position)) {
       return position
@@ -285,4 +261,31 @@ function extractSkills(text: string): string[] {
   }
   
   return [...new Set(skills)]
+}
+
+/**
+ * 清理文本中的无效字符，确保可以安全保存到PostgreSQL
+ */
+function cleanTextForDatabase(text: string): string {
+  if (!text) return ''
+  
+  return text
+    // 移除所有形式的null字符
+    .replace(/\u0000/g, '')
+    .replace(/\x00/g, '')
+    .replace(/\\u0000/g, '')
+    .replace(/\\x00/g, '')
+    // 移除其他危险的控制字符，但保留换行符、制表符
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    // 移除各种BOM标记
+    .replace(/^\uFEFF/, '')
+    .replace(/^\uFFFE/, '')
+    // 移除Unicode替换字符
+    .replace(/\uFFFD/g, '')
+    // 修复PDF可能产生的特殊字符
+    .replace(/[\uE000-\uF8FF]/g, '') // 私用区字符
+    // 保留换行符，但清理多余的空白字符
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim()
 }

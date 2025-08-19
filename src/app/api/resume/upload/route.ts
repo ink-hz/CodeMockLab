@@ -5,32 +5,32 @@ import { prisma } from "@/lib/prisma"
 import { parseResume } from "@/lib/resume-parser"
 import { DeepSeekAI } from "@/lib/deepseek-ai"
 import { PrivacyFilter, ResumePreprocessor } from "@/lib/privacy-filter"
-import { withErrorHandler, createError, successResponse } from "@/lib/error-handler"
+import { withErrorHandler, errorFactory, successResponse } from "@/lib/error-handler"
 
 export const POST = withErrorHandler(async (request: NextRequest) => {
   console.log("=== 开始简历上传和AI分析流程 ===")
   
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    throw createError("Unauthorized", 401)
+    throw errorFactory.unauthorized()
   }
 
   const formData = await request.formData()
   const file = formData.get("file") as File
 
   if (!file) {
-    throw createError("File is required", 400)
+    throw errorFactory.missingField("file")
   }
 
   // 验证文件类型
   const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
   if (!validTypes.includes(file.type)) {
-    throw createError("Invalid file type. Only PDF and Word documents are allowed.", 400)
+    throw errorFactory.unsupportedFileType(["PDF", "Word文档"])
   }
 
   // 验证文件大小 (10MB)
   if (file.size > 10 * 1024 * 1024) {
-    throw createError("File size exceeds 10MB limit", 400)
+    throw errorFactory.fileSizeExceeded(10)
   }
 
   console.log(`文件信息: ${file.name}, 大小: ${file.size} bytes, 类型: ${file.type}`)
@@ -44,57 +44,115 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   try {
     parsedContent = await parseResume(buffer, file.type)
   } catch (parseError) {
-    console.warn("文件解析失败，使用基础文本提取:", parseError)
-    // 如果解析失败，创建基础结构
-    parsedContent = {
-      rawText: `文件名: ${file.name}\n类型: ${file.type}\n大小: ${file.size} bytes`,
-      techKeywords: [],
-      projects: [],
-      workExperience: [],
-      experienceLevel: "JUNIOR" as const,
-      skills: []
-    }
+    console.warn("文件解析失败:", parseError)
+    throw errorFactory.fileUploadError("文件解析失败，请检查文件格式是否正确")
   }
 
   console.log(`简历解析完成，提取到 ${parsedContent.techKeywords?.length || 0} 个技术关键词`)
+  console.log('parsedContent结构:', Object.keys(parsedContent))
+  console.log('projects数量:', parsedContent.projects?.length || 0)
+  console.log('workExperience数量:', parsedContent.workExperience?.length || 0)
+  
+  // 额外清理，确保所有数据都安全
+  const cleanData = (obj: any): any => {
+    if (typeof obj === 'string') {
+      return obj
+        // 移除所有null字符和其变体
+        .replace(/\u0000/g, '')
+        .replace(/\x00/g, '')
+        // 移除其他危险的控制字符
+        .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+        // 移除UTF-8 BOM
+        .replace(/^\uFEFF/, '')
+        // 修复可能的编码问题
+        .replace(/\uFFFD/g, '') // 替换字符
+        .trim()
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(cleanData)
+    }
+    if (obj && typeof obj === 'object') {
+      const cleaned: any = {}
+      for (const [key, value] of Object.entries(obj)) {
+        cleaned[key] = cleanData(value)
+      }
+      return cleaned
+    }
+    return obj
+  }
+  
+  const cleanedParsedContent = cleanData(parsedContent)
 
   // 保存初始简历记录到数据库
-  const resume = await prisma.resume.create({
-    data: {
-      userId: session.user.id,
-      fileName: file.name,
-      fileUrl: `/uploads/${Date.now()}-${file.name}`,
-      parsedContent: parsedContent as any,
-      techKeywords: parsedContent.techKeywords || [],
-      projects: parsedContent.projects || [],
-      workExperience: parsedContent.workExperience || [],
-    }
-  })
+  let resume
+  try {
+    resume = await prisma.resume.create({
+      data: {
+        userId: session.user.id,
+        fileName: file.name,
+        fileUrl: `/uploads/${Date.now()}-${file.name}`,
+        parsedContent: cleanedParsedContent as any,
+        techKeywords: cleanedParsedContent.techKeywords || [],
+        projects: cleanedParsedContent.projects || [],
+        workExperience: cleanedParsedContent.workExperience || [],
+      }
+    })
 
-  console.log(`简历保存到数据库，ID: ${resume.id}`)
+    console.log(`简历保存到数据库，ID: ${resume.id}`)
+  } catch (dbError) {
+    console.error('数据库保存失败:', dbError)
+    throw errorFactory.databaseError("简历保存失败")
+  }
 
-  // 启动AI分析流程（设置10秒超时）
+  // 启动AI分析流程 - 阻塞调用，同步返回结果
   let aiAnalysisResult = null
   try {
     console.log("开始AI技术画像分析...")
     
-    // 创建一个带超时的Promise
-    const aiAnalysisPromise = performAIAnalysis(resume.id, parsedContent.rawText)
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('AI分析超时')), 10000)
-    )
+    // 只调用AI分析，不保存数据库
+    const deepseek = new DeepSeekAI()
+    const preprocessed = ResumePreprocessor.preprocessForAI(parsedContent.rawText)
+    console.log(`原始内容长度: ${parsedContent.rawText.length}`)
+    console.log(`过滤后内容长度: ${preprocessed.metadata.filteredLength}`)
     
-    aiAnalysisResult = await Promise.race([aiAnalysisPromise, timeoutPromise])
-    console.log("AI分析完成")
+    // 直接调用AI分析 - 临时禁用隐私过滤，使用清理后的原始内容
+    console.log("使用完整原始简历内容进行AI分析（已清理无效字符）")
+    aiAnalysisResult = await analyzeResumeWithAI(deepseek, cleanedParsedContent.rawText)
+    console.log("AI分析完成，准备返回给前端")
+    
+    // 异步保存到数据库，不阻塞响应
+    setTimeout(async () => {
+      try {
+        console.log("异步保存AI分析结果到数据库...")
+        await saveAIProfileToDatabase(resume.id, aiAnalysisResult, {
+          originalLength: parsedContent.rawText.length,
+          filteredLength: parsedContent.rawText.length,
+          removedFields: [],
+          hasContactInfo: true
+        })
+        console.log("AI分析结果异步保存成功")
+      } catch (saveError) {
+        console.error("异步保存AI分析结果失败:", saveError)
+      }
+    }, 0)
+    
   } catch (aiError: any) {
-    console.warn("AI分析失败或超时，继续使用基础解析结果:", aiError.message)
-    // 不阻塞主流程
+    console.warn("AI分析失败:", aiError.message)
+    console.error("AI分析错误详情:", aiError)
+    // AI分析失败不阻塞主流程，但记录警告
+    aiAnalysisResult = null
   }
 
-  // 更新用户画像
-  await updateUserProfile(session.user.id, parsedContent, aiAnalysisResult)
-
   console.log("=== 简历上传和分析流程完成 ===")
+
+  // 异步更新用户画像，不阻塞响应
+  setTimeout(async () => {
+    try {
+      await updateUserProfile(session.user.id, cleanedParsedContent, aiAnalysisResult)
+    } catch (error) {
+      console.error("异步更新用户画像失败:", error)
+    }
+  }, 0)
 
   return successResponse({
     resumeId: resume.id,
@@ -106,9 +164,18 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     },
     aiAnalysis: aiAnalysisResult ? {
       hasAIAnalysis: true,
-      techHighlights: aiAnalysisResult.techHighlights?.slice(0, 3) || [],
-      experienceLevel: aiAnalysisResult.experienceLevel || parsedContent.experienceLevel,
-      specializations: aiAnalysisResult.specializations?.slice(0, 3) || []
+      // 返回完整的AI分析结果给前端
+      techStack: aiAnalysisResult.techStack || [],
+      techHighlights: aiAnalysisResult.techHighlights || [],
+      coreExpertise: aiAnalysisResult.coreExpertise || [],
+      simulatedInterview: aiAnalysisResult.simulatedInterview || null,
+      experienceLevel: aiAnalysisResult.experienceLevel?.level || parsedContent.experienceLevel,
+      experienceReasoning: aiAnalysisResult.experienceLevel?.reasoning || "",
+      specializations: aiAnalysisResult.specializations || [],
+      projectAnalysis: aiAnalysisResult.projectAnalysis || [],
+      careerSuggestions: aiAnalysisResult.careerSuggestions || [],
+      roleMatchingAnalysis: aiAnalysisResult.roleMatchingAnalysis || {},
+      skillAssessment: aiAnalysisResult.skillAssessment || {}
     } : {
       hasAIAnalysis: false,
       message: "AI分析正在处理中，请稍后查看"
@@ -116,91 +183,160 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   }, "简历上传成功")
 })
 
-async function performAIAnalysis(resumeId: string, rawText: string) {
-  console.log("=== 开始AI简历分析 ===")
-  console.log(`简历ID: ${resumeId}`)
-  console.log(`原始内容长度: ${rawText.length}`)
 
-  // 1. 预处理和隐私过滤
-  const preprocessed = ResumePreprocessor.preprocessForAI(rawText)
-  console.log(`过滤后内容长度: ${preprocessed.metadata.filteredLength}`)
-  console.log(`移除字段: ${preprocessed.metadata.removedFields.join(', ') || '无'}`)
+async function analyzeResumeWithAI(deepseek: DeepSeekAI, content: string) {
+  const prompt = `你是一位严格的技术简历分析师，请基于完整的简历原文执行精准分析。注意：以下是未经任何过滤的完整简历内容，包含所有技术细节和项目信息。
 
-  // 2. AI分析
-  const deepseek = new DeepSeekAI()
-  const analysis = await analyzeResumeWithAI(deepseek, preprocessed.processedContent)
+## 完整简历原文（未过滤）
+${content}
 
-  // 3. 保存分析结果到数据库
-  const aiProfile = await saveAIProfileToDatabase(resumeId, analysis, preprocessed.metadata)
+**分析原则**
+1. 100%忠实于简历原文，禁止任何推测或添加虚构内容
+2. 技术栈识别优先级：架构能力 > 云原生 > 大数据 > AI > 编程语言
+3. 仅记录简历中明确提及的技术和项目
+4. 所有结论必须有直接原文证据支持
+5. 技术栈重要性按在简历中的比重和职责层次确定
 
-  console.log("=== AI简历分析完成 ===")
+**技术栈识别规则**
+1. **技术提取**：
+   - 仅提取简历中出现的具体技术名词
+   - 将复合表述拆分为独立技术（如"Docker + Kubernetes"→Docker和Kubernetes）
+   - 架构能力单独标记（如"微服务架构设计"、"系统重构"）
 
-  return {
-    ...analysis,
-    aiProfileId: aiProfile?.id
+2. **熟练度判定**：
+   - 专家级：出现"主导"、"架构师"、"重构"、"设计"等关键词
+   - 高级：出现"负责"、"带领团队"、"性能优化"等关键词
+   - 中级：仅在技能栈中列出或项目中使用
+
+3. **重要性计算dominanceScore**：
+   - 架构师/CTO/总架构师职位提及的技术：基础分95分
+   - 主导/设计/重构等关键动词修饰的技术：基础分90分
+   - 深度掌握/精通等表述的技术：基础分85分
+   - 大数据/AI/云原生平台相关技术：基础分80分
+   - 项目中核心技术角色：+10分
+   - 编程语言/框架类：基础分60分（除非有架构级应用）
+   - 最高不超过100分
+
+**输出格式（严格JSON）**
+{
+  "techStack": [
+    {
+      "technology": "技术名称",
+      "category": "架构|云平台|大数据|AI|语言|框架|工具",
+      "proficiency": "专家|高级|中级",
+      "evidence": "引用原文片段",
+      "marketValue": 0-100,
+      "lastUsed": "年份",
+      "dominanceScore": 0-100
+    }
+  ],
+  "coreExpertise": ["从简历中提取的核心专长领域"],
+  "projectAnalysis": [
+    {
+      "project": "项目名称（原文）",
+      "period": "时间段（原文）",
+      "role": "担任角色（原文）",
+      "description": "项目描述（原文）",
+      "techDepth": ["核心技术1", "核心技术2"],
+      "complexity": "低|中|高|极高",
+      "achievements": "成果描述（原文）",
+      "interviewQuestions": ["基于该具体项目的3个技术深度问题"]
+    }
+  ],
+  "simulatedInterview": {
+    "architectureDesign": ["基于简历中实际架构经验的2个系统设计题"],
+    "techDepth": {
+      "核心技术名": ["基于简历经验的3个原理级问题"]
+    },
+    "leadership": ["基于简历中团队管理经验的2个场景题"]
+  },
+  "experienceLevel": {
+    "level": "资深专家|高级工程师|中级工程师|初级工程师",
+    "confidence": 0.0-1.0,
+    "reasoning": "基于：1.工作年限（原文） 2.最高职位（原文） 3.项目复杂度和团队规模"
+  },
+  "specializations": ["基于项目和职责分析的专业领域"],
+  "careerSuggestions": ["基于当前技术栈和经验的发展建议"],
+  "roleMatchingAnalysis": {
+    "岗位类型": "匹配度百分比（基于实际经验）"
   }
 }
 
-async function analyzeResumeWithAI(deepseek: DeepSeekAI, content: string) {
-  const prompt = `你是一位资深的技术招聘专家和简历分析师，请对以下简历进行全面的技术画像分析。
+**关键要求（违反将被拒绝）**：
+1. 技术栈必须按dominanceScore降序排列，架构师相关技术必须排在最前面
+2. 项目分析ONLY使用简历中明确列出的项目，禁止编造任何项目：
+   - 如简历提及"ZTP智能平台"，则使用"ZTP智能平台"
+   - 如简历提及"防火墙8.0.51版本"，则使用"防火墙8.0.51版本"
+   - 绝不允许出现"电商平台"等简历中不存在的项目
+3. 所有项目描述必须使用简历原文，不得添加任何推测内容
+4. 所有evidence字段必须是简历原文的精确引用
+5. **重要**：直接返回纯JSON对象，绝对不要使用markdown代码块标记
 
-## 简历内容
-${content}
+**dominanceScore计算示例**：
+- "ZTP产品总架构师，主导平台整体架构" + "Kubernetes高可用集群" → Kubernetes dominanceScore = 100
+- "深度掌握 Kafka/Pulsar（消息队列）" → Kafka dominanceScore = 95
+- "垂直领域大模型设计（安全GPT）" → TensorFlow dominanceScore = 90
+- "精通 C++/Java" → C++ dominanceScore = 85
+- "熟练使用React" → React dominanceScore = 60
+- 仅在技能栈列出 → dominanceScore = 40
 
-## 分析要求
-请从以下维度进行深入分析，并返回JSON格式的结构化数据：
-
-### 1. 技术栈评估 (techStack)
-分析候选人掌握的所有技术，按价值和市场需求排序：
-- technology: 技术名称
-- category: 分类(语言/框架/工具/平台)
-- proficiency: 熟练度评估(初级/中级/高级/专家)
-- valueScore: 市场价值评分(0-100)
-- evidenceCount: 在简历中的证据数量
-- lastUsed: 最近使用时间估计
-
-### 2. 技术亮点 (techHighlights)
-提取3-5个最突出的技术亮点
-
-### 3. 项目经验分析 (projectAnalysis)
-分析每个重要项目：
-- projectName: 项目名称
-- description: 项目描述
-- techStack: 使用的技术栈
-- complexity: 复杂度(简单/中等/复杂/高级)
-- impact: 项目影响力
-- role: 在项目中的角色
-- highlights: 技术亮点
-
-### 4. 技能评估 (skillAssessment)
-对主要技能领域进行评分和分析
-
-### 5. 经验等级评估 (experienceLevel)
-- level: 总体经验等级(junior/mid/senior/lead)
-- confidence: 评估置信度(0-1)
-- reasoning: 评估理由
-
-### 6. 技术专长领域 (specializations)
-识别候选人的专业领域
-
-### 7. 职业发展建议 (careerSuggestions)
-基于技术栈和经验的发展建议
-
-### 8. 岗位匹配分析 (roleMatchingAnalysis)
-分析适合的岗位类型和匹配度
-
-请返回严格的JSON格式，不要包含任何解释文字：`
+现在开始分析，只返回JSON对象：`
 
   try {
-    const response = await (deepseek as any).callDeepSeek(prompt, 0.3, 2000)
+    const response = await (deepseek as any).callDeepSeek(prompt, 0.1, 6000)
     
-    // 尝试解析JSON响应
+    // 尝试解析JSON响应 - 强化清理逻辑
     let parsedAnalysis
     try {
-      parsedAnalysis = JSON.parse(response)
+      // 更强力的清理markdown标记和额外文本
+      let cleaned = response
+        .replace(/```json\s*/gi, "")        // 移除 ```json
+        .replace(/```\s*/g, "")             // 移除 ```
+        .replace(/^[^{]*/, "")              // 移除开头的非JSON文本
+        .replace(/[^}]*$/, "")              // 移除结尾的非JSON文本
+        .trim()
+      
+      // 如果找不到完整JSON，尝试更精确的提取
+      if (!cleaned.startsWith("{") || !cleaned.endsWith("}")) {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleaned = jsonMatch[0];
+        } else {
+          throw new Error("未找到有效的JSON格式");
+        }
+      }
+      
+      // 解析JSON
+      parsedAnalysis = JSON.parse(cleaned)
+      
+      // 验证必要字段存在
+      if (!parsedAnalysis.techStack || !Array.isArray(parsedAnalysis.techStack)) {
+        throw new Error("AI返回的数据结构不正确");
+      }
+      
+      // 强制按dominanceScore排序技术栈
+      if (parsedAnalysis.techStack.length > 0) {
+        parsedAnalysis.techStack.sort((a, b) => (b.dominanceScore || 0) - (a.dominanceScore || 0));
+      }
+      
+      console.log("AI分析结果解析成功:", Object.keys(parsedAnalysis))
+      console.log("技术栈排序验证 - 前3项:", parsedAnalysis.techStack?.slice(0, 3).map(t => `${t.technology}(${t.dominanceScore})`))
+      
     } catch (parseError) {
-      console.warn("AI返回的不是有效JSON，使用备用解析方法")
+      console.warn("AI返回的不是有效JSON，使用备用解析方法:", parseError)
+      console.log("原始响应前500字符:", response.substring(0, 500))
       parsedAnalysis = await generateFallbackAnalysis(content)
+    }
+    
+    // 修复roleMatchingAnalysis格式（从数组转换为对象）
+    if (parsedAnalysis.roleMatchingAnalysis && Array.isArray(parsedAnalysis.roleMatchingAnalysis)) {
+      const roleMatchingObj: Record<string, number> = {}
+      parsedAnalysis.roleMatchingAnalysis.forEach((item: any) => {
+        if (item.role && item.matchScore !== undefined) {
+          roleMatchingObj[item.role] = item.matchScore
+        }
+      })
+      parsedAnalysis.roleMatchingAnalysis = roleMatchingObj
     }
     
     return parsedAnalysis
@@ -325,6 +461,10 @@ function determineSpecializations(techStack: string[]): string[] {
 }
 
 async function saveAIProfileToDatabase(resumeId: string, analysis: any, metadata: any) {
+  console.log("=== 开始保存AI分析结果到数据库 ===")
+  console.log("Resume ID:", resumeId)
+  console.log("Analysis keys:", Object.keys(analysis))
+  
   try {
     // 检查是否已存在AI分析结果
     const existingProfile = await prisma.resumeAIProfile.findUnique({
@@ -354,7 +494,10 @@ async function saveAIProfileToDatabase(resumeId: string, analysis: any, metadata
         skillAssessment: analysis.skillAssessment || {},
         experienceLevel: analysis.experienceLevel?.level || 'mid',
         experienceLevelConfidence: analysis.experienceLevel?.confidence || 0.7,
+        experienceReasoning: analysis.experienceLevel?.reasoning,
         specializations: analysis.specializations || [],
+        coreExpertise: analysis.coreExpertise || [],
+        simulatedInterview: analysis.simulatedInterview || null,
         careerSuggestions: analysis.careerSuggestions || [],
         roleMatchingAnalysis: analysis.roleMatchingAnalysis || {},
         rawAnalysis: {
@@ -368,7 +511,10 @@ async function saveAIProfileToDatabase(resumeId: string, analysis: any, metadata
         skillAssessment: analysis.skillAssessment || {},
         experienceLevel: analysis.experienceLevel?.level || 'mid',
         experienceLevelConfidence: analysis.experienceLevel?.confidence || 0.7,
+        experienceReasoning: analysis.experienceLevel?.reasoning,
         specializations: analysis.specializations || [],
+        coreExpertise: analysis.coreExpertise || [],
+        simulatedInterview: analysis.simulatedInterview || null,
         careerSuggestions: analysis.careerSuggestions || [],
         roleMatchingAnalysis: analysis.roleMatchingAnalysis || {},
         rawAnalysis: {
@@ -386,12 +532,12 @@ async function saveAIProfileToDatabase(resumeId: string, analysis: any, metadata
         await prisma.techStackItem.create({
           data: {
             profileId: aiProfile.id,
-            technology: tech.technology,
-            category: tech.category,
-            proficiency: tech.proficiency,
-            valueScore: tech.valueScore,
-            evidenceCount: tech.evidenceCount,
-            lastUsed: tech.lastUsed
+            technology: tech.technology || '',
+            category: tech.category || '其他',
+            proficiency: tech.proficiency || '中级',
+            valueScore: tech.dominanceScore || tech.marketValue || tech.valueScore || 70,
+            evidenceCount: tech.evidenceCount || (tech.evidence ? tech.evidence.length : 1),
+            lastUsed: tech.lastUsed || '近期'
           }
         })
       }
@@ -403,13 +549,15 @@ async function saveAIProfileToDatabase(resumeId: string, analysis: any, metadata
         await prisma.projectAnalysis.create({
           data: {
             profileId: aiProfile.id,
-            projectName: project.projectName,
-            description: project.description,
-            techStack: project.techStack || [],
-            complexity: project.complexity,
-            impact: project.impact,
-            role: project.role,
-            highlights: project.highlights || []
+            projectName: project.project || project.projectName || '项目',
+            description: project.description || `${project.project || '项目'}的开发工作`,
+            techStack: project.techDepth || project.techStack || [],
+            complexity: project.complexity || '中等',
+            impact: project.achievements || project.impact || '业务价值贡献',
+            role: project.role || '开发工程师',
+            highlights: project.highlights || [],
+            techDepth: project.techDepth || [],
+            interviewQuestions: project.interviewQuestions || []
           }
         })
       }
@@ -426,7 +574,24 @@ async function updateUserProfile(userId: string, parsedContent: any, aiAnalysis:
   try {
     // 从AI分析结果中提取更准确的信息
     const techStack = aiAnalysis?.techStack?.map((item: any) => item.technology) || parsedContent.techKeywords || []
-    const experienceLevel = aiAnalysis?.experienceLevel?.level?.toUpperCase() || parsedContent.experienceLevel || "JUNIOR"
+    
+    // 映射AI分析的经验等级到数据库枚举
+    let experienceLevel = "JUNIOR"
+    if (aiAnalysis?.experienceLevel?.level) {
+      const level = aiAnalysis.experienceLevel.level
+      if (level.includes("资深") || level.includes("专家") || level.includes("lead")) {
+        experienceLevel = "LEAD"
+      } else if (level.includes("高级") || level.includes("senior")) {
+        experienceLevel = "SENIOR"
+      } else if (level.includes("中级") || level.includes("mid")) {
+        experienceLevel = "MID"
+      } else {
+        experienceLevel = "JUNIOR"
+      }
+    } else if (parsedContent.experienceLevel) {
+      experienceLevel = parsedContent.experienceLevel
+    }
+    
     const specializations = aiAnalysis?.specializations || []
 
     await prisma.userProfile.upsert({

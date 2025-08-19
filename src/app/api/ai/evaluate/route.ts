@@ -42,11 +42,29 @@ export async function POST(request: NextRequest) {
     }
 
     // 准备AI评估请求
+    // 映射questionType到AI服务期望的格式
+    let mappedQuestionType: 'CODING' | 'BEHAVIORAL' | 'SYSTEM_DESIGN'
+    switch (question.type) {
+      case 'CODING':
+      case 'ALGORITHM':
+        mappedQuestionType = 'CODING'
+        break
+      case 'BEHAVIORAL':
+        mappedQuestionType = 'BEHAVIORAL'
+        break
+      case 'SYSTEM_DESIGN':
+      case 'TECHNICAL_KNOWLEDGE':
+        mappedQuestionType = 'SYSTEM_DESIGN'
+        break
+      default:
+        mappedQuestionType = 'CODING'
+    }
+    
     const evaluationRequest = {
       question: question.content,
       userAnswer,
-      modelAnswer: question.modelAnswer,
-      questionType: question.type
+      modelAnswer: question.modelAnswer || undefined,
+      questionType: mappedQuestionType
     }
 
     // 调用AI服务进行评估

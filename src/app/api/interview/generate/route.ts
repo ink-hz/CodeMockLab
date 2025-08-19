@@ -99,8 +99,21 @@ export async function POST(request: NextRequest) {
     const resumeProfile = {
       techKeywords: resume.techKeywords || [],
       experienceLevel: userProfile?.experienceLevel || "MID",
-      projects: resume.projects || [],
-      workExperience: resume.workExperience || []
+      projects: (resume.projects || []).map((project: any) => ({
+        name: project.name || '',
+        description: project.description || '',
+        technologies: project.technologies || [],
+        role: project.role || '',
+        duration: project.duration,
+        achievements: project.achievements
+      })),
+      workExperience: (resume.workExperience || []).map((work: any) => ({
+        company: work.company || '',
+        position: work.position || '',
+        duration: work.duration || '',
+        description: work.description || '',
+        technologies: work.technologies
+      }))
     }
 
     // 获取AI技术画像数据（增强版本）
@@ -112,7 +125,8 @@ export async function POST(request: NextRequest) {
       techStack: resume.aiProfile.techStack,
       projectAnalysis: resume.aiProfile.projectAnalysis,
       roleMatchingAnalysis: resume.aiProfile.roleMatchingAnalysis,
-      skillAssessment: resume.aiProfile.skillAssessment
+      skillAssessment: resume.aiProfile.skillAssessment,
+      careerSuggestions: resume.aiProfile.careerSuggestions
     } : null
 
     console.log("=== 面试问题生成 ===")

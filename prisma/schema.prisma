@@ -83,6 +83,15 @@ model ResumeAIProfile {
   // 匹配分析 (相对于不同岗位的匹配度)
   roleMatchingAnalysis Json
   
+  // 新增字段：核心专长领域
+  coreExpertise   String[]        @default([]) // AI识别的核心专长，如 ["云原生架构", "AI与大数据融合"]
+  
+  // 新增字段：模拟面试题库
+  simulatedInterview Json?         // 包含 architectureDesign, techDepth, leadership 等分类的面试题
+  
+  // 新增字段：经验等级评估的详细理由
+  experienceReasoning String?      // AI评估经验等级的详细理由
+  
   // AI解析原始数据
   rawAnalysis     Json
   
@@ -117,6 +126,12 @@ model ProjectAnalysis {
   impact          String          // 项目影响力描述
   role            String          // 在项目中的角色
   highlights      String[]        // 技术亮点
+  
+  // 新增字段：核心技术深度
+  techDepth       String[]        @default([]) // 项目中的核心技术
+  
+  // 新增字段：针对该项目的面试问题
+  interviewQuestions String[]     @default([]) // AI生成的针对性面试问题
   
   createdAt       DateTime        @default(now())
 }

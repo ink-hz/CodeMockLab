@@ -6,14 +6,14 @@ import { withErrorHandler, createError, successResponse } from "@/lib/error-hand
 
 export const GET = withErrorHandler(async (
   request: NextRequest,
-  { params }: { params: { resumeId: string } }
+  { params }: { params: Promise<{ resumeId: string }> }
 ) => {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     throw createError("Unauthorized", 401)
   }
 
-  const { resumeId } = params
+  const { resumeId } = await params
 
   if (!resumeId) {
     throw createError("Resume ID is required", 400)
@@ -59,6 +59,7 @@ export const GET = withErrorHandler(async (
     // 基础信息
     experienceLevel: aiProfile.experienceLevel,
     experienceLevelConfidence: aiProfile.experienceLevelConfidence,
+    experienceReasoning: aiProfile.experienceReasoning,
     
     // 技术栈分析
     techStack: aiProfile.techStack.map(tech => ({
@@ -76,6 +77,12 @@ export const GET = withErrorHandler(async (
     // 专长领域
     specializations: aiProfile.specializations,
     
+    // 新增：核心专长领域
+    coreExpertise: aiProfile.coreExpertise,
+    
+    // 新增：模拟面试题库
+    simulatedInterview: aiProfile.simulatedInterview,
+    
     // 项目分析
     projectAnalysis: aiProfile.projectAnalysis.map(project => ({
       projectName: project.projectName,
@@ -84,7 +91,9 @@ export const GET = withErrorHandler(async (
       complexity: project.complexity,
       impact: project.impact,
       role: project.role,
-      highlights: project.highlights
+      highlights: project.highlights,
+      techDepth: project.techDepth,
+      interviewQuestions: project.interviewQuestions
     })),
     
     // 技能评估

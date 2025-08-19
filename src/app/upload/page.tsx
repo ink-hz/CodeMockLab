@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, CheckCircle, ArrowRight, RefreshCw, AlertCircle, X } from "lucide-react"
+import { Upload, FileText, CheckCircle, ArrowRight, RefreshCw, AlertCircle, X, BarChart3, Star, Lightbulb, Target, TrendingUp, Users, MessageSquare, Brain, Layers } from "lucide-react"
 
 export default function UploadPage() {
   const { data: session } = useSession()
@@ -22,6 +22,8 @@ export default function UploadPage() {
   const [analysisProgress, setAnalysisProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [analysisStage, setAnalysisStage] = useState<string>("")
+  const [detailedAnalysis, setDetailedAnalysis] = useState<any>(null)
+  const [showReport, setShowReport] = useState(false)
 
   useEffect(() => {
     // 检查是否已有简历
@@ -32,8 +34,36 @@ export default function UploadPage() {
     try {
       const response = await fetch("/api/resume/check")
       const data = await response.json()
+      console.log("简历检查结果:", data)
+      
       if (data.hasResume) {
+        console.log("发现现有简历，ID:", data.resume.id)
         setExistingResume(data.resume)
+        
+        // 如果有简历，尝试获取AI分析数据
+        if (data.resume.id) {
+          console.log("开始获取AI分析数据，resumeId:", data.resume.id)
+          try {
+            const aiResponse = await fetch(`/api/resume/ai-profile/${data.resume.id}`)
+            const aiResult = await aiResponse.json()
+            console.log("AI分析API响应:", aiResult)
+            
+            if (aiResult.success && aiResult.data.hasAIProfile) {
+              console.log("AI分析数据获取成功:", aiResult.data)
+              console.log("技术栈数据:", aiResult.data.techStack)
+              setAiProfile(aiResult.data)
+              setDetailedAnalysis(aiResult.data)
+            } else {
+              console.log("没有AI分析数据或获取失败")
+            }
+          } catch (aiError) {
+            console.log("AI分析数据获取失败，但不影响基础功能:", aiError)
+          }
+        } else {
+          console.log("简历没有ID，无法获取AI分析数据")
+        }
+      } else {
+        console.log("没有发现现有简历")
       }
     } catch (error) {
       console.error("Error checking resume:", error)
@@ -68,26 +98,26 @@ export default function UploadPage() {
     let isCompleted = false
 
     try {
-      setAnalysisStage("正在上传文件...")
+      setAnalysisStage("正在上传文件并进行AI分析...")
       console.log("开始上传文件:", file.name, "大小:", file.size, "类型:", file.type)
       
-      // 启动进度条
+      // 启动进度条（AI分析期间显示更慢的进度）
       progressTimer = setInterval(() => {
         if (!isCompleted) {
           setUploadProgress(prev => {
-            // 更平滑的进度增长，最高到95%
-            if (prev < 30) return prev + 10
-            if (prev < 60) return prev + 5
-            if (prev < 80) return prev + 3
-            if (prev < 95) return prev + 1
+            // AI分析期间的进度更慢更稳定
+            if (prev < 20) return prev + 5  // 上传阶段
+            if (prev < 40) return prev + 2  // 解析阶段
+            if (prev < 70) return prev + 1  // AI分析阶段（最耗时）
+            if (prev < 90) return prev + 0.5 // 等待完成
             return prev
           })
         }
-      }, 300)
+      }, 800) // 增加间隔时间，显示更稳定
 
-      // 添加超时控制（30秒）
+      // 添加超时控制（240秒，给AI分析充足时间）
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      const timeoutId = setTimeout(() => controller.abort(), 240000)
       
       console.log("发送上传请求到 /api/resume/upload")
       const response = await fetch("/api/resume/upload", {
@@ -97,7 +127,7 @@ export default function UploadPage() {
       }).catch(err => {
         console.error("上传请求失败:", err)
         if (err.name === 'AbortError') {
-          throw new Error('上传超时，请重试')
+          throw new Error('AI分析超时（超过120秒），请重试。复杂简历可能需要分多次处理')
         }
         throw err
       })
@@ -111,7 +141,7 @@ export default function UploadPage() {
         clearInterval(progressTimer)
       }
       setUploadProgress(100)
-      setAnalysisStage("处理完成")
+      setAnalysisStage("AI分析完成，正在处理结果...")
 
       const result = await response.json()
       
@@ -121,6 +151,8 @@ export default function UploadPage() {
         // 如果有AI分析结果，直接显示
         if (result.data.aiAnalysis && result.data.aiAnalysis.hasAIAnalysis) {
           setAiProfile(result.data.aiAnalysis)
+          setDetailedAnalysis(result.data.aiAnalysis)
+          setShowReport(true) // 默认展开详细报告
           setAnalysisStage("AI分析完成")
           console.log("AI分析结果:", result.data.aiAnalysis)
         } else {
@@ -136,10 +168,7 @@ export default function UploadPage() {
           checkExistingResume()
         }
         
-        setAnalysisStage("准备跳转...")
-        setTimeout(() => {
-          router.push("/job-setup")
-        }, 3000)
+        setAnalysisStage("分析完成，可查看详细报告")
       } else {
         const errorMsg = result.error || result.message || "上传失败"
         setError(errorMsg)
@@ -187,6 +216,8 @@ export default function UploadPage() {
       
       if (result.success && result.data.hasAIProfile) {
         setAiProfile(result.data)
+        setDetailedAnalysis(result.data)
+        setShowReport(true) // 默认展开详细报告
         setAnalysisStage("AI分析完成")
         console.log("AI技术画像获取完成:", result.data)
       } else {
@@ -227,131 +258,610 @@ export default function UploadPage() {
 
   if (uploadResult) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Card className="max-w-2xl w-full">
-          <CardHeader className="text-center">
-            {isAnalyzing ? (
-              <>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <header className="bg-white border-b">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold">简历分析报告</h1>
+              <div className="flex gap-2">
+                {detailedAnalysis && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowReport(!showReport)}
+                  >
+                    {showReport ? "收起报告" : "查看详细报告"}
+                  </Button>
+                )}
+                <Button 
+                  size="sm"
+                  onClick={() => router.push("/job-setup")}
+                  disabled={isAnalyzing}
+                  variant={detailedAnalysis && !showReport ? "outline" : "default"}
+                >
+                  继续设置岗位
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-6">
+          {isAnalyzing ? (
+            <Card className="max-w-2xl mx-auto">
+              <CardContent className="text-center py-8">
                 <RefreshCw className="h-16 w-16 text-blue-500 mx-auto mb-4 animate-spin" />
-                <CardTitle>AI正在分析您的技术画像</CardTitle>
-                <CardDescription>
+                <CardTitle className="mb-2">AI正在分析您的技术画像</CardTitle>
+                <CardDescription className="mb-4">
                   {analysisStage || "正在过滤敏感信息并生成技术评估报告..."}
                 </CardDescription>
-                <div className="mt-4">
-                  <Progress value={analysisProgress} className="max-w-xs mx-auto" />
-                  <p className="text-sm text-muted-foreground mt-2">{analysisProgress}%</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <CardTitle>
-                  {existingResume ? "简历更新成功！" : "简历解析成功！"}
-                </CardTitle>
-                <CardDescription>
-                  {aiProfile 
-                    ? "AI技术画像分析完成，正在跳转到下一步..." 
-                    : "简历上传完成，正在跳转到下一步..."}
-                </CardDescription>
-              </>
-            )}
-          </CardHeader>
-          <CardContent>
+                <Progress value={analysisProgress} className="max-w-xs mx-auto" />
+                <p className="text-sm text-muted-foreground mt-2">{analysisProgress}%</p>
+              </CardContent>
+            </Card>
+          ) : (
             <div className="space-y-6">
-              {/* 基础技能识别 */}
-              <div>
-                <p className="text-sm font-medium mb-2">识别的技能：</p>
-                <div className="flex flex-wrap gap-2">
-                  {uploadResult.techKeywords?.slice(0, 8).map((skill: string, index: number) => (
-                    <span key={index} className="bg-primary/10 text-primary px-2 py-1 rounded text-xs">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* AI技术画像结果 */}
-              {aiProfile && !isAnalyzing && (
-                <div className="space-y-4 border-t pt-4">
-                  <h3 className="font-semibold text-green-600 flex items-center gap-2">
-                    🤖 AI技术画像分析
-                  </h3>
-                  
-                  {/* 经验等级 */}
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">技术等级评估</span>
-                      <Badge variant="secondary">
-                        {aiProfile.experienceLevel === 'junior' ? '初级' : 
-                         aiProfile.experienceLevel === 'mid' ? '中级' : 
-                         aiProfile.experienceLevel === 'senior' ? '高级' : '专家级'}
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-green-700">
-                      置信度: {Math.round((aiProfile.experienceLevelConfidence || 0.7) * 100)}%
+              {/* 成功提示 */}
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                    <div>
+                      <h3 className="font-semibold text-green-800">
+                        {existingResume ? "简历更新成功！" : "简历解析成功！"}
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        {detailedAnalysis ? "AI技术画像分析完成，点击下方查看详细报告" : "基础分析完成，可点击继续下一步"}
+                      </p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
 
-                  {/* 技术专长 */}
-                  {aiProfile.specializations && aiProfile.specializations.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">技术专长领域：</p>
-                      <div className="flex flex-wrap gap-2">
-                        {aiProfile.specializations.slice(0, 4).map((spec: string, index: number) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {spec}
-                          </Badge>
-                        ))}
+              {/* 快速概览 */}
+              {detailedAnalysis && !showReport && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <BarChart3 className="h-8 w-8 text-blue-500" />
+                        <div>
+                          <h3 className="font-semibold text-blue-800">详细分析报告已生成</h3>
+                          <p className="text-sm text-blue-700">查看完整的技术栈分析、项目评估和职业建议</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline"
+                        onClick={() => setShowReport(true)}
+                        className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                      >
+                        查看报告
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <Star className="h-8 w-8 text-yellow-500" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">技术等级</p>
+                        <p className="font-semibold">
+                          {detailedAnalysis?.experienceLevel === 'junior' ? '初级工程师' : 
+                           detailedAnalysis?.experienceLevel === 'mid' ? '中级工程师' : 
+                           detailedAnalysis?.experienceLevel === 'senior' ? '高级工程师' : 
+                           detailedAnalysis?.experienceLevel === 'lead' ? '技术专家' : '中级工程师'}
+                        </p>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <BarChart3 className="h-8 w-8 text-blue-500" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">技术栈数量</p>
+                        <p className="font-semibold">
+                          {detailedAnalysis?.stats?.totalTechnologies || uploadResult?.techKeywords?.length || 0} 项技术
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <TrendingUp className="h-8 w-8 text-green-500" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">市场价值评分</p>
+                        <p className="font-semibold">
+                          {detailedAnalysis?.stats?.avgValueScore || 75}/100
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 详细分析报告 */}
+              {showReport && detailedAnalysis && (
+                <div className="space-y-6">
+                  {/* 核心专长领域 */}
+                  {detailedAnalysis.coreExpertise && detailedAnalysis.coreExpertise.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Brain className="h-5 w-5" />
+                          核心专长领域
+                        </CardTitle>
+                        <CardDescription>AI识别的技术专长和核心能力</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {detailedAnalysis.coreExpertise.map((expertise: string, index: number) => (
+                            <div key={index} className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <Layers className="h-4 w-4 text-blue-600" />
+                                <span className="font-semibold text-blue-800">{expertise}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
 
-                  {/* 技术亮点 */}
-                  {aiProfile.techHighlights && aiProfile.techHighlights.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">技术亮点：</p>
-                      <div className="space-y-1">
-                        {aiProfile.techHighlights.slice(0, 3).map((highlight: string, index: number) => (
-                          <div key={index} className="text-xs text-muted-foreground flex items-start gap-2">
-                            <span className="text-green-500">•</span>
-                            <span>{highlight}</span>
+                  {/* 模拟面试题库 */}
+                  {detailedAnalysis.simulatedInterview && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <MessageSquare className="h-5 w-5" />
+                          AI生成的模拟面试题库
+                        </CardTitle>
+                        <CardDescription>基于您的技术栈和经验生成的针对性面试问题</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-6">
+                          {/* 架构设计题 */}
+                          {detailedAnalysis.simulatedInterview.architectureDesign && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Target className="h-4 w-4 text-green-600" />
+                                系统架构设计题
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.architectureDesign.map((question: string, index: number) => (
+                                  <div key={index} className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-green-800">Q{index + 1}:</p>
+                                    <p className="text-green-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 技术深度题 */}
+                          {detailedAnalysis.simulatedInterview.techDepth && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Brain className="h-4 w-4 text-blue-600" />
+                                技术深度问题
+                              </h4>
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {Object.entries(detailedAnalysis.simulatedInterview.techDepth).map(([tech, questions]: [string, any]) => (
+                                  <div key={tech} className="border rounded-lg p-4">
+                                    <h5 className="font-medium text-blue-800 mb-3 flex items-center gap-2">
+                                      <Badge variant="outline">{tech}</Badge>
+                                    </h5>
+                                    <div className="space-y-2">
+                                      {questions.map((question: string, qIndex: number) => (
+                                        <div key={qIndex} className="bg-blue-50 p-3 rounded text-sm">
+                                          <span className="font-medium text-blue-700">Q{qIndex + 1}: </span>
+                                          <span className="text-blue-600">{question}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 领导力题 */}
+                          {detailedAnalysis.simulatedInterview.leadership && (
+                            <div>
+                              <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                                <Users className="h-4 w-4 text-purple-600" />
+                                领导力与团队协作
+                              </h4>
+                              <div className="space-y-3">
+                                {detailedAnalysis.simulatedInterview.leadership.map((question: string, index: number) => (
+                                  <div key={index} className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-r-lg">
+                                    <p className="text-sm font-medium text-purple-800">Q{index + 1}:</p>
+                                    <p className="text-purple-700 mt-1">{question}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 技术栈分析 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5" />
+                        技术栈深度分析
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {detailedAnalysis.techStack?.slice(0, 10).map((tech: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium">{tech.technology}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {tech.category}
+                                </Badge>
+                                <Badge variant={
+                                  tech.proficiency === '专家' ? 'default' :
+                                  tech.proficiency === '高级' ? 'secondary' :
+                                  tech.proficiency === '中级' ? 'outline' : 'destructive'
+                                }>
+                                  {tech.proficiency}
+                                </Badge>
+                              </div>
+                              {tech.evidence && tech.evidence.length > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  证据: {tech.evidence[0]?.substring(0, 100)}...
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-green-600">
+                                {tech.valueScore}/100
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                市场价值
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    </CardContent>
+                  </Card>
 
-                  {/* 高价值技术栈 */}
-                  {aiProfile.techStack && aiProfile.techStack.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">高价值技术栈：</p>
-                      <div className="flex flex-wrap gap-2">
-                        {aiProfile.techStack
-                          .filter((tech: any) => tech.valueScore >= 70)
-                          .slice(0, 6)
-                          .map((tech: any, index: number) => (
-                            <div key={index} className="bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs">
-                              <span className="font-medium">{tech.technology}</span>
-                              <span className="text-blue-600 ml-1">({tech.valueScore}分)</span>
+                  {/* 项目经验分析 */}
+                  {detailedAnalysis.projectAnalysis && detailedAnalysis.projectAnalysis.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Target className="h-5 w-5" />
+                          项目经验分析
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {detailedAnalysis.projectAnalysis.map((project: any, index: number) => (
+                            <div key={index} className="border rounded-lg p-4">
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <h4 className="font-semibold">{project.projectName}</h4>
+                                  <p className="text-sm text-muted-foreground">{project.role}</p>
+                                </div>
+                                <Badge variant={
+                                  project.complexity === '极高' ? 'default' :
+                                  project.complexity === '高' ? 'secondary' :
+                                  project.complexity === '中' ? 'outline' : 'destructive'
+                                }>
+                                  {project.complexity}复杂度
+                                </Badge>
+                              </div>
+                              <p className="text-sm mb-3">{project.description}</p>
+                              <div className="space-y-3">
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">核心技术栈:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {project.techStack?.slice(0, 6).map((tech: string, techIndex: number) => (
+                                      <Badge key={techIndex} variant="outline" className="text-xs">
+                                        {tech}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                                
+                                {project.techDepth && project.techDepth.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium text-muted-foreground mb-1">技术深度:</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {project.techDepth.map((tech: string, techIndex: number) => (
+                                        <Badge key={techIndex} variant="secondary" className="text-xs">
+                                          {tech}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {project.highlights && project.highlights.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium text-muted-foreground mb-1">技术亮点:</p>
+                                    <ul className="text-xs text-muted-foreground space-y-1">
+                                      {project.highlights.slice(0, 3).map((highlight: string, hIndex: number) => (
+                                        <li key={hIndex} className="flex items-start gap-2">
+                                          <span className="text-green-500">•</span>
+                                          <span>{highlight}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {project.interviewQuestions && project.interviewQuestions.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium text-muted-foreground mb-2">针对性面试问题:</p>
+                                    <div className="space-y-2">
+                                      {project.interviewQuestions.slice(0, 2).map((question: string, qIndex: number) => (
+                                        <div key={qIndex} className="bg-orange-50 border border-orange-200 rounded p-2">
+                                          <p className="text-xs font-medium text-orange-800">Q{qIndex + 1}:</p>
+                                          <p className="text-xs text-orange-700 mt-1">{question}</p>
+                                        </div>
+                                      ))}
+                                      {project.interviewQuestions.length > 2 && (
+                                        <p className="text-xs text-muted-foreground italic">
+                                          还有 {project.interviewQuestions.length - 2} 个问题...
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))}
-                      </div>
-                    </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 经验等级详细评估 */}
+                  {detailedAnalysis.experienceReasoning && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Star className="h-5 w-5" />
+                          经验等级评估
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <Badge variant={
+                              detailedAnalysis.experienceLevel === 'lead' ? 'default' :
+                              detailedAnalysis.experienceLevel === 'senior' ? 'secondary' :
+                              detailedAnalysis.experienceLevel === 'mid' ? 'outline' : 'destructive'
+                            } className="text-sm">
+                              {detailedAnalysis.experienceLevel === 'junior' ? '初级工程师' : 
+                               detailedAnalysis.experienceLevel === 'mid' ? '中级工程师' : 
+                               detailedAnalysis.experienceLevel === 'senior' ? '高级工程师' : '技术专家'}
+                            </Badge>
+                            <span className="text-sm font-medium text-yellow-700">
+                              置信度: {Math.round((detailedAnalysis.experienceLevelConfidence || 0.7) * 100)}%
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-yellow-800 mb-2">AI评估理由:</p>
+                            <p className="text-sm text-yellow-700">{detailedAnalysis.experienceReasoning}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 专业能力评估 */}
+                  {detailedAnalysis.skillAssessment && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5" />
+                          专业能力评估
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {Object.entries(detailedAnalysis.skillAssessment).map(([skill, score]: [string, any]) => (
+                            <div key={skill} className="text-center">
+                              <div className="relative w-16 h-16 mx-auto mb-2">
+                                <svg className="w-16 h-16 transform -rotate-90">
+                                  <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="transparent"
+                                    className="text-gray-200"
+                                  />
+                                  <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="transparent"
+                                    strokeDasharray={`${2 * Math.PI * 28}`}
+                                    strokeDashoffset={`${2 * Math.PI * 28 * (1 - score / 100)}`}
+                                    className="text-blue-500"
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="text-sm font-bold">{score}</span>
+                                </div>
+                              </div>
+                              <p className="text-sm font-medium capitalize">{skill}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 职业发展建议 */}
+                  {detailedAnalysis.careerSuggestions && detailedAnalysis.careerSuggestions.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Lightbulb className="h-5 w-5" />
+                          职业发展建议
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {detailedAnalysis.careerSuggestions.map((suggestion: string, index: number) => (
+                            <div key={index} className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">
+                              <Lightbulb className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <p className="text-sm">{suggestion}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 岗位匹配分析 */}
+                  {detailedAnalysis.roleMatchingAnalysis && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Target className="h-5 w-5" />
+                          岗位匹配度分析
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {Object.entries(detailedAnalysis.roleMatchingAnalysis).map(([role, score]: [string, any]) => (
+                            <div key={role} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <span className="font-medium">{role}</span>
+                              <div className="flex items-center gap-3">
+                                <div className="w-32 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-green-500 h-2 rounded-full" 
+                                    style={{ width: `${score}%` }}
+                                  ></div>
+                                </div>
+                                <span className="text-sm font-semibold w-12 text-right">{score}%</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               )}
 
-              <Button 
-                className="w-full"
-                onClick={() => router.push("/job-setup")}
-                disabled={isAnalyzing}
-              >
-                {isAnalyzing ? "AI分析中..." : "继续设置岗位信息"}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              {/* 基础技能展示（当没有详细分析时） */}
+              {!detailedAnalysis && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>识别的技能</CardTitle>
+                    <CardDescription>
+                      基础解析结果，AI详细分析正在处理中
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {uploadResult.techKeywords?.map((skill: string, index: number) => (
+                        <Badge key={index} variant="outline">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 简历评价和优化建议 */}
+              <Card className="border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                    <Star className="h-5 w-5" />
+                    简历评价与优化建议
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-green-100 p-4 rounded-lg">
+                        <h4 className="font-semibold text-green-800 mb-2">✅ 简历优势</h4>
+                        <ul className="text-sm text-green-700 space-y-1">
+                          {detailedAnalysis?.techStack?.length > 8 && (
+                            <li>• 技术栈丰富，覆盖多个领域</li>
+                          )}
+                          {detailedAnalysis?.stats?.avgValueScore > 80 && (
+                            <li>• 掌握高价值技术，市场竞争力强</li>
+                          )}
+                          {detailedAnalysis?.projectAnalysis?.some((p: any) => p.complexity === '高' || p.complexity === '极高') && (
+                            <li>• 有复杂项目经验，技术深度较好</li>
+                          )}
+                          {detailedAnalysis?.experienceLevel === 'senior' || detailedAnalysis?.experienceLevel === 'lead' ? (
+                            <li>• 技术等级较高，有资深经验</li>
+                          ) : (
+                            <li>• 基础技能扎实，有良好发展潜力</li>
+                          )}
+                        </ul>
+                      </div>
+
+                      <div className="bg-orange-100 p-4 rounded-lg">
+                        <h4 className="font-semibold text-orange-800 mb-2">⚡ 优化建议</h4>
+                        <ul className="text-sm text-orange-700 space-y-1">
+                          {!detailedAnalysis?.projectAnalysis?.length && (
+                            <li>• 建议增加项目经验描述，突出技术应用</li>
+                          )}
+                          {detailedAnalysis?.stats?.avgValueScore < 70 && (
+                            <li>• 考虑学习更多高价值技术，提升竞争力</li>
+                          )}
+                          {!detailedAnalysis?.skillAssessment?.leadership && (
+                            <li>• 可以增加团队协作和领导力相关经验</li>
+                          )}
+                          <li>• 建议量化项目成果，如性能提升、用户增长等</li>
+                          <li>• 可以添加开源贡献或技术博客链接</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-100 p-4 rounded-lg">
+                      <h4 className="font-semibold text-blue-800 mb-2">🎯 面试准备建议</h4>
+                      <div className="text-sm text-blue-700 space-y-2">
+                        <p>基于您的技术栈分析，建议重点准备以下面试内容：</p>
+                        <ul className="space-y-1 ml-4">
+                          {detailedAnalysis?.techStack?.slice(0, 3).map((tech: any, index: number) => (
+                            <li key={index}>• {tech.technology} 的深度原理和最佳实践</li>
+                          ))}
+                          {detailedAnalysis?.projectAnalysis?.length > 0 && (
+                            <li>• 详细阐述项目中的技术难点和解决方案</li>
+                          )}
+                          <li>• 系统设计能力和架构思维的展示</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     )
   }
@@ -385,17 +895,43 @@ export default function UploadPage() {
                   </Badge>
                 </div>
               </CardHeader>
-              {existingResume.techKeywords && existingResume.techKeywords.length > 0 && (
+              {(aiProfile?.techStack || existingResume.techKeywords) && (
                 <CardContent>
-                  <p className="text-sm text-muted-foreground mb-2">识别的技能：</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {aiProfile?.techStack ? "核心技术栈（按重要性排序）：" : "识别的技能："}
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    {existingResume.techKeywords.slice(0, 6).map((keyword: string, index: number) => (
-                      <Badge key={index} variant="outline">
-                        {keyword}
-                      </Badge>
-                    ))}
+                    {aiProfile?.techStack ? (
+                      // 显示AI分析的技术栈，按valueScore排序
+                      aiProfile.techStack.slice(0, 8).map((tech: any, index: number) => (
+                        <Badge 
+                          key={index} 
+                          variant={tech.valueScore >= 90 ? "default" : "outline"}
+                          className={tech.valueScore >= 90 ? "bg-blue-600" : ""}
+                        >
+                          {tech.technology} ({tech.valueScore})
+                        </Badge>
+                      ))
+                    ) : (
+                      // 备用：显示基础解析的技术关键词
+                      existingResume.techKeywords.slice(0, 6).map((keyword: string, index: number) => (
+                        <Badge key={index} variant="outline">
+                          {keyword}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                   <div className="mt-4 flex gap-2">
+                    {aiProfile && (
+                      <Button 
+                        size="sm" 
+                        variant="default"
+                        onClick={() => router.push("/resume-analysis")}
+                      >
+                        <BarChart3 className="mr-2 h-4 w-4" />
+                        查看完整分析报告
+                      </Button>
+                    )}
                     <Button 
                       size="sm" 
                       variant="outline"
@@ -458,6 +994,17 @@ export default function UploadPage() {
                   <p className="text-lg font-medium mb-4">{analysisStage || "正在上传和解析简历..."}</p>
                   <Progress value={uploadProgress} className="max-w-xs mx-auto" />
                   <p className="text-sm text-muted-foreground mt-2">{uploadProgress}%</p>
+                  
+                  {/* AI分析提示 */}
+                  {uploadProgress > 20 && (
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <Brain className="h-4 w-4" />
+                        <span className="font-medium">AI深度分析中</span>
+                      </div>
+                      <p>DeepSeek正在为您生成技术画像和面试题库，请耐心等待（通常需要120-180秒）</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div
