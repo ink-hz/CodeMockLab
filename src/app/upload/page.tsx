@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, CheckCircle, ArrowRight, RefreshCw } from "lucide-react"
+import { Upload, FileText, CheckCircle, ArrowRight, RefreshCw, AlertCircle, X } from "lucide-react"
 
 export default function UploadPage() {
   const { data: session } = useSession()
@@ -20,6 +20,8 @@ export default function UploadPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [aiProfile, setAiProfile] = useState<any>(null)
   const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [analysisStage, setAnalysisStage] = useState<string>("")
 
   useEffect(() => {
     // 检查是否已有简历
@@ -41,11 +43,29 @@ export default function UploadPage() {
   const handleFileUpload = async (file: File) => {
     setIsUploading(true)
     setUploadProgress(0)
+    setError(null)
+    setAnalysisStage("准备上传...")
+
+    // 验证文件
+    const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    if (!validTypes.includes(file.type)) {
+      setError("不支持的文件类型。请上传PDF或Word文档。")
+      setIsUploading(false)
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError("文件大小超过10MB限制。")
+      setIsUploading(false)
+      return
+    }
 
     const formData = new FormData()
     formData.append("file", file)
 
     try {
+      setAnalysisStage("正在上传文件...")
+      
       // 模拟上传进度
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
@@ -64,15 +84,24 @@ export default function UploadPage() {
 
       clearInterval(progressInterval)
       setUploadProgress(100)
+      setAnalysisStage("处理完成")
 
       const result = await response.json()
       
       if (result.success) {
-        setUploadResult(result.parsedContent)
+        setUploadResult(result.data.basicAnalysis)
         
-        // 开始AI分析
-        if (result.resumeId && result.parsedContent?.content) {
-          await performAIAnalysis(result.resumeId, result.parsedContent.content)
+        // 如果有AI分析结果，直接显示
+        if (result.data.aiAnalysis && result.data.aiAnalysis.hasAIAnalysis) {
+          setAiProfile(result.data.aiAnalysis)
+          setAnalysisStage("AI分析完成")
+          console.log("AI分析结果:", result.data.aiAnalysis)
+        } else {
+          // 如果没有AI分析，尝试获取详细分析结果
+          if (result.data.resumeId) {
+            setAnalysisStage("获取AI分析结果...")
+            await fetchAIProfile(result.data.resumeId)
+          }
         }
         
         // 如果是更新简历，刷新现有简历信息
@@ -80,22 +109,27 @@ export default function UploadPage() {
           checkExistingResume()
         }
         
+        setAnalysisStage("准备跳转...")
         setTimeout(() => {
           router.push("/job-setup")
         }, 3000)
       } else {
-        alert("上传失败: " + result.error)
+        const errorMsg = result.error || result.message || "上传失败"
+        setError(errorMsg)
+        console.error("上传失败:", result)
       }
     } catch (error) {
-      alert("上传失败，请重试")
+      console.error("上传异常:", error)
+      setError("网络错误，请检查连接后重试")
     } finally {
       setIsUploading(false)
     }
   }
 
-  const performAIAnalysis = async (resumeId: string, content: string) => {
+  const fetchAIProfile = async (resumeId: string) => {
     setIsAnalyzing(true)
     setAnalysisProgress(0)
+    setAnalysisStage("获取AI分析结果...")
 
     try {
       // 模拟分析进度
@@ -109,30 +143,26 @@ export default function UploadPage() {
         })
       }, 500)
 
-      const response = await fetch("/api/resume/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          resumeId,
-          content
-        })
-      })
+      const response = await fetch(`/api/resume/ai-profile/${resumeId}`)
 
       clearInterval(progressInterval)
       setAnalysisProgress(100)
 
       const result = await response.json()
       
-      if (result.success) {
-        setAiProfile(result.aiProfile)
-        console.log("AI技术画像分析完成:", result.aiProfile)
+      if (result.success && result.data.hasAIProfile) {
+        setAiProfile(result.data)
+        setAnalysisStage("AI分析完成")
+        console.log("AI技术画像获取完成:", result.data)
       } else {
-        console.warn("AI分析失败:", result.error)
+        setAnalysisStage("AI分析暂未完成")
+        console.warn("AI分析结果不存在:", result.message)
+        // 不设置为错误，因为这可能是正常情况（AI还在处理中）
       }
     } catch (error) {
-      console.error("AI分析出错:", error)
+      console.error("获取AI分析结果出错:", error)
+      setAnalysisStage("AI分析获取失败")
+      // 不设置error，因为基础简历分析已经成功
     } finally {
       setIsAnalyzing(false)
       setAnalysisProgress(0)
@@ -170,7 +200,7 @@ export default function UploadPage() {
                 <RefreshCw className="h-16 w-16 text-blue-500 mx-auto mb-4 animate-spin" />
                 <CardTitle>AI正在分析您的技术画像</CardTitle>
                 <CardDescription>
-                  正在过滤敏感信息并生成技术评估报告...
+                  {analysisStage || "正在过滤敏感信息并生成技术评估报告..."}
                 </CardDescription>
                 <div className="mt-4">
                   <Progress value={analysisProgress} className="max-w-xs mx-auto" />
@@ -357,10 +387,40 @@ export default function UploadPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800">上传失败</p>
+                      <p className="text-sm text-red-600 mt-1">{error}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setError(null)}
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        重试
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => setError(null)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {isUploading ? (
                 <div className="text-center py-8">
                   <Upload className="h-12 w-12 text-primary mx-auto mb-4 animate-bounce" />
-                  <p className="text-lg font-medium mb-4">正在上传和解析简历...</p>
+                  <p className="text-lg font-medium mb-4">{analysisStage || "正在上传和解析简历..."}</p>
                   <Progress value={uploadProgress} className="max-w-xs mx-auto" />
                   <p className="text-sm text-muted-foreground mt-2">{uploadProgress}%</p>
                 </div>

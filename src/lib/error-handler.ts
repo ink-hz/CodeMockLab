@@ -57,7 +57,10 @@ export class AppError extends Error {
 }
 
 // 预定义的错误创建函数
-export const createError = {
+export const createError = (message: string, statusCode: number = 500) => 
+  new AppError(message, ErrorCode.INTERNAL_SERVER_ERROR, statusCode)
+
+export const errorFactory = {
   unauthorized: (message = "未授权访问") => 
     new AppError(message, ErrorCode.UNAUTHORIZED, 401),
     
@@ -183,44 +186,44 @@ export function asyncErrorHandler<T extends any[], R>(
 export const validate = {
   required: (value: any, fieldName: string) => {
     if (value === undefined || value === null || value === '') {
-      throw createError.missingField(fieldName)
+      throw errorFactory.missingField(fieldName)
     }
   },
   
   string: (value: any, fieldName: string) => {
     if (typeof value !== 'string') {
-      throw createError.invalidInput(`${fieldName} 必须是字符串`)
+      throw errorFactory.invalidInput(`${fieldName} 必须是字符串`)
     }
   },
   
   number: (value: any, fieldName: string) => {
     if (typeof value !== 'number' || isNaN(value)) {
-      throw createError.invalidInput(`${fieldName} 必须是有效数字`)
+      throw errorFactory.invalidInput(`${fieldName} 必须是有效数字`)
     }
   },
   
   email: (value: string, fieldName: string = 'email') => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(value)) {
-      throw createError.invalidInput(`${fieldName} 格式无效`)
+      throw errorFactory.invalidInput(`${fieldName} 格式无效`)
     }
   },
   
   array: (value: any, fieldName: string) => {
     if (!Array.isArray(value)) {
-      throw createError.invalidInput(`${fieldName} 必须是数组`)
+      throw errorFactory.invalidInput(`${fieldName} 必须是数组`)
     }
   },
   
   minLength: (value: string, minLength: number, fieldName: string) => {
     if (value.length < minLength) {
-      throw createError.invalidInput(`${fieldName} 长度不能少于 ${minLength} 个字符`)
+      throw errorFactory.invalidInput(`${fieldName} 长度不能少于 ${minLength} 个字符`)
     }
   },
   
   maxLength: (value: string, maxLength: number, fieldName: string) => {
     if (value.length > maxLength) {
-      throw createError.invalidInput(`${fieldName} 长度不能超过 ${maxLength} 个字符`)
+      throw errorFactory.invalidInput(`${fieldName} 长度不能超过 ${maxLength} 个字符`)
     }
   }
 }
