@@ -4,10 +4,8 @@ const nextConfig: NextConfig = {
   // 生产环境优化
   output: 'standalone',
   
-  // 实验性功能
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client']
-  },
+  // 服务端外部包配置
+  serverExternalPackages: ['@prisma/client', 'pdf-parse', 'mammoth'],
   
   // 图片优化
   images: {
